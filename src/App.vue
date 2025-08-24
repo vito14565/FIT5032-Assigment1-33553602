@@ -1,30 +1,26 @@
-<script setup>
-import HelloWorld from './components/HelloWorld.vue'
-</script>
-
 <template>
   <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
+    <!-- Navigation bar -->
+    <nav class="navbar navbar-expand-lg bg-light px-3">
+      <a class="navbar-brand fw-bold">Health Hub</a>
+      <div class="navbar-nav">
+        <RouterLink class="nav-link" to="/">Home</RouterLink>
+        <RouterLink class="nav-link" to="/dashboard">Dashboard</RouterLink>
+        <RouterLink class="nav-link" to="/recipes">Recipes</RouterLink>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="container py-4">
+      <RouterView/>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-muted py-4 border-top">
+      © 2025 Health Hub
+    </footer>
   </div>
-  <HelloWorld msg="Vite + Vue" />
 </template>
 
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-}
-</style>
+<script setup>
+</script>
