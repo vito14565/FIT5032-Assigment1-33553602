@@ -10,7 +10,6 @@ const firebaseConfig = {
   storageBucket: "nutrition-app-19cd7.firebasestorage.app",
   messagingSenderId: "886466181962",
   appId: "1:886466181962:web:76f54e0bc8b25034b59fb3",
-  // measurementId 不需要
 }
 
 const app = initializeApp(firebaseConfig)
