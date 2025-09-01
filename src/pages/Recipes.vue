@@ -1,8 +1,11 @@
 <script setup>
-// Fetch dynamic data from Firestore instead of local demo array
+// Fetch dynamic data from Firestore
 import { ref, computed, onMounted } from 'vue'
-import { db } from '../firebase'                     // <-- make sure src/firebase.js exists
+import { db } from '../firebase'
 import { collection, getDocs, query, orderBy } from 'firebase/firestore'
+
+// ⭐ Rating UI (C.3)
+import RecipeRating from '../components/RecipeRating.vue'
 
 // UI state
 const loading = ref(true)
@@ -16,7 +19,7 @@ const qText = ref('')   // keyword for title/tags
 const minCal = ref('')  // optional min calories
 const maxCal = ref('')  // optional max calories
 
-// Load data on mount
+// Load data on mount (one-time fetch is fine for the list)
 onMounted(async () => {
   try {
     const col = collection(db, 'recipes')
@@ -30,17 +33,28 @@ onMounted(async () => {
   }
 })
 
-// Apply filters
+// Apply filters with sane defaults
 const filtered = computed(() => {
   const kw = qText.value.trim().toLowerCase()
-  const min = minCal.value === '' ? -Infinity : Number(minCal.value)
-  const max = maxCal.value === '' ?  Infinity : Number(maxCal.value)
+
+  // Coerce string -> number; fallback to ±Infinity on NaN/empty
+  const minParsed = Number(minCal.value)
+  const maxParsed = Number(maxCal.value)
+  const min = (minCal.value === '' || Number.isNaN(minParsed)) ? -Infinity : minParsed
+  const max = (maxCal.value === '' || Number.isNaN(maxParsed)) ?  Infinity : maxParsed
 
   return recipes.value.filter(r => {
-    const titleMatch = String(r.title || '').toLowerCase().includes(kw)
-    const tagMatch = Array.isArray(r.tags) && r.tags.some(t => String(t).toLowerCase().includes(kw))
-    const inRange = typeof r.calories === 'number' && r.calories >= min && r.calories <= max
-    return (kw ? (titleMatch || tagMatch) : true) && inRange
+    const titleStr = String(r.title || '')
+    const tagsArr = Array.isArray(r.tags) ? r.tags : []
+    const cals = typeof r.calories === 'number' ? r.calories : NaN
+
+    const titleMatch = titleStr.toLowerCase().includes(kw)
+    const tagMatch = tagsArr.some(t => String(t).toLowerCase().includes(kw))
+    const kwOk = kw ? (titleMatch || tagMatch) : true
+
+    const inRange = !Number.isNaN(cals) && cals >= min && cals <= max
+
+    return kwOk && inRange
   })
 })
 </script>
@@ -72,9 +86,19 @@ const filtered = computed(() => {
         <div class="card-body">
           <h5 class="card-title">{{ r.title }}</h5>
           <p class="card-text mb-2">Calories: {{ r.calories }}</p>
-          <div>
-            <span class="badge bg-secondary me-1" v-for="t in r.tags" :key="t">{{ t }}</span>
+
+          <div class="mb-2">
+            <span
+              class="badge bg-secondary me-1"
+              v-for="t in (Array.isArray(r.tags) ? r.tags : [])"
+              :key="t"
+            >
+              {{ t }}
+            </span>
           </div>
+
+          <!-- C.3 Rating widget -->
+          <RecipeRating :recipe-id="r.id" />
         </div>
       </div>
     </div>
