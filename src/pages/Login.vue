@@ -45,8 +45,8 @@ async function login() {
   resetMsg.value = ''
   loading.value = true
   try {
-    // Normalize email; NEVER trim password
     const normalizedEmail = email.value.trim().toLowerCase()
+    // do NOT trim password
     await signInWithEmailAndPassword(auth, normalizedEmail, password.value)
     router.push('/dashboard')
   } catch (e) {
@@ -89,9 +89,11 @@ async function resetPassword() {
           autocomplete="email"
           required
         />
+
+        <!-- do NOT trim password -->
         <input
           class="form-control"
-          v-model="password"           <!-- do NOT trim password -->
+          v-model="password"
           type="password"
           placeholder="Password"
           minlength="6"
@@ -108,7 +110,6 @@ async function resetPassword() {
         </button>
 
         <div class="d-flex justify-content-between align-items-center">
-          <!-- Password reset link -->
           <button type="button" class="btn btn-link p-0 small" @click="resetPassword">
             Forgot password?
           </button>

@@ -49,30 +49,25 @@ async function register() {
   loading.value = true
   error.value = ''
   try {
-    // Normalize email (lowercase) but NEVER trim password
+    // Normalize email (lowercase) but NEVER trim the password
     const normalizedEmail = email.value.trim().toLowerCase()
 
     const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, password.value)
 
     // Create user profile doc (best-effort)
     try {
-      await setDoc(doc(db, 'users', cred.user.uid), {
-        email: normalizedEmail,
-        role: 'user',
-        createdAt: Date.now(),
-      }, { merge: true })
+      await setDoc(
+        doc(db, 'users', cred.user.uid),
+        { email: normalizedEmail, role: 'user', createdAt: Date.now() },
+        { merge: true },
+      )
     } catch (e) {
-      // Don't block sign-in flow; optionally send to your logger
-      console.warn('setDoc failed:', e)
+      console.warn('setDoc failed:', e) // non-blocking
     }
 
-    // User is now signed in
     router.push('/dashboard')
   } catch (e) {
-    const msg = mapAuthError(e)
-    error.value = msg
-
-    // If already registered, send them to login with email prefilled
+    error.value = mapAuthError(e)
     if ((e?.code || '').toLowerCase().includes('email-already-in-use')) {
       router.push({ path: '/login', query: { email: email.value.trim().toLowerCase() } })
     }
@@ -103,12 +98,12 @@ async function register() {
           <div class="invalid-feedback">Please enter a valid email address.</div>
         </div>
 
-        <!-- Password -->
+        <!-- Password (do NOT trim password) -->
         <div class="input-group">
           <input
             class="form-control"
             :type="showPwd ? 'text' : 'password'"
-            v-model="password"              <!-- do not trim password -->
+            v-model="password"
             placeholder="Password (min 6 chars)"
             minlength="6"
             autocomplete="new-password"
