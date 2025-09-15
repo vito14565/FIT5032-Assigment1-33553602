@@ -1,12 +1,13 @@
 <script setup>
 // Register page with robust Firebase error handling & redirects
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { auth, db } from '../firebase'
 import { onAuthStateChanged, createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 
 const router = useRouter()
+const route = useRoute()
 
 // Form state
 const email = ref('')
@@ -26,11 +27,18 @@ const canSubmit = computed(() => emailOk.value && pwdOk.value && !loading.value)
 watch([email, password], () => { if (error.value) error.value = '' })
 
 // If already signed in, don't show register page
+let stopAuthWatcher = null
 onMounted(() => {
-  const stop = onAuthStateChanged(auth, (user) => {
-    if (user) router.replace('/dashboard')
-    stop()
+  stopAuthWatcher = onAuthStateChanged(auth, (user) => {
+    if (user) {
+      // 已登入就導回 dashboard（或 redirect 指定頁）
+      const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
+      router.replace(target)
+    }
   })
+})
+onUnmounted(() => {
+  if (typeof stopAuthWatcher === 'function') stopAuthWatcher()
 })
 
 // Map Firebase errors to friendly messages
@@ -40,7 +48,8 @@ function mapAuthError(e) {
   if (code.includes('invalid-email')) return 'Please enter a valid email.'
   if (code.includes('weak-password')) return 'Password should be at least 6 characters.'
   if (code.includes('too-many-requests')) return 'Too many attempts. Please wait and try again.'
-  if (code.includes('operation-not-allowed')) return 'Email/Password sign-in is not enabled.'
+  if (code.includes('operation-not-allowed')) return 'Email/Password sign-in is not enabled in Firebase Console.'
+  if (code.includes('network-request-failed')) return 'Network error. Please check your connection and try again.'
   return 'Failed to register. Please try again.'
 }
 
@@ -54,22 +63,27 @@ async function register() {
 
     const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, password.value)
 
-    // Create user profile doc (best-effort)
+    // Create/merge user profile doc (best-effort)
     try {
       await setDoc(
         doc(db, 'users', cred.user.uid),
-        { email: normalizedEmail, role: 'user', createdAt: Date.now() },
+        { email: normalizedEmail, role: 'user', createdAt: serverTimestamp() },
         { merge: true },
       )
+      localStorage.setItem(`role:${cred.user.uid}`, 'user')
     } catch (e) {
       console.warn('setDoc failed:', e) // non-blocking
     }
 
-    router.push('/dashboard')
+    // Redirect to intended page or dashboard
+    const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
+    router.push(target)
   } catch (e) {
-    error.value = mapAuthError(e)
+    const msg = mapAuthError(e)
     if ((e?.code || '').toLowerCase().includes('email-already-in-use')) {
-      router.push({ path: '/login', query: { email: email.value.trim().toLowerCase() } })
+      router.push({ path: '/login', query: { email: email.value.trim().toLowerCase(), redirect: route.query.redirect } })
+    } else {
+      error.value = msg
     }
   } finally {
     loading.value = false
@@ -82,7 +96,12 @@ async function register() {
     <div class="w-100" style="max-width:480px">
       <h2 class="h4 mb-3 text-center">Register</h2>
 
-      <form class="vstack gap-3 p-4 border rounded-3 bg-white shadow-sm" @submit.prevent="register" novalidate>
+      <form
+        class="vstack gap-3 p-4 border rounded-3 bg-white shadow-sm"
+        @submit.prevent="register"
+        novalidate
+        aria-label="Registration form"
+      >
         <!-- Email -->
         <div>
           <input
@@ -92,6 +111,7 @@ async function register() {
             placeholder="Email"
             autocomplete="email"
             required
+            :aria-invalid="email && !emailOk"
             :class="{ 'is-invalid': email && !emailOk }"
             autofocus
           />
@@ -108,6 +128,7 @@ async function register() {
             minlength="6"
             autocomplete="new-password"
             required
+            :aria-invalid="password && !pwdOk"
             :class="{ 'is-invalid': password && !pwdOk }"
           />
           <button
@@ -128,7 +149,7 @@ async function register() {
           {{ error }}
         </div>
 
-        <button class="btn btn-success w-100" :disabled="!canSubmit || loading">
+        <button class="btn btn-success w-100" :disabled="!canSubmit || loading" :aria-busy="loading">
           <span v-if="loading">Creating…</span>
           <span v-else>Create account</span>
         </button>
