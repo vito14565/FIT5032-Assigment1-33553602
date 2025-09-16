@@ -13,18 +13,18 @@ import Recipes from '../pages/Recipes.vue'
 import Login from '../pages/Login.vue'
 import Register from '../pages/Register.vue'
 
-// Admin-only page (create a minimal placeholder if you haven't yet)
+// Admin-only page
 import AdminPanel from '../pages/AdminPanel.vue'
 
 const routes = [
-  { path: '/', component: Home, meta: { public: true } },                 //  Only Home is public
-  { path: '/dashboard', component: Dashboard },                           //  Requires login
-  { path: '/recipes', component: Recipes },                               //  Requires login
-  { path: '/admin', component: AdminPanel, meta: { role: 'admin' } },     //  Admin only
-  { path: '/login', component: Login, meta: { public: true, publicOnly: true } },
-  { path: '/register', component: Register, meta: { public: true, publicOnly: true } },
-  // Optional: 404 page
-  // { path: '/:pathMatch(.*)*', component: NotFound, meta: { public: true } },
+  { path: '/', component: Home, meta: { public: true } },                 // Public route
+  { path: '/dashboard', component: Dashboard },                           // Requires authentication
+  { path: '/recipes', component: Recipes },                               // Requires authentication
+  { path: '/admin', component: AdminPanel, meta: { role: 'admin' } },     // Admin-only route
+  { path: '/login', component: Login, meta: { public: true, publicOnly: true } }, // Public-only
+  // Alias so URLs like /login/recipes are still handled by Login.vue
+  { path: '/login/:rest(.*)?', component: Login, meta: { public: true, publicOnly: true } },
+  { path: '/register', component: Register, meta: { public: true, publicOnly: true } }, // Public-only
 ]
 
 const router = createRouter({
@@ -33,12 +33,12 @@ const router = createRouter({
 })
 
 /**
- * Wait for Firebase Auth to resolve the current session.
- * Returns the user or null.
+ * Resolve the current user session.
+ * Returns the user object or null.
  */
 function getCurrentUser() {
   if (auth.currentUser) return Promise.resolve(auth.currentUser)
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const stop = onAuthStateChanged(auth, (user) => {
       stop()
       resolve(user)
@@ -47,8 +47,8 @@ function getCurrentUser() {
 }
 
 /**
- * Fetch role from Firestore users/{uid}. Returns 'admin' | 'user'.
- * Defaults to 'user' if the doc is missing.
+ * Fetch user role from Firestore users/{uid}.
+ * Defaults to 'user' if the document does not exist.
  */
 async function getUserRole(uid) {
   const snap = await getDoc(doc(db, 'users', uid))
@@ -59,19 +59,26 @@ async function getUserRole(uid) {
 router.beforeEach(async (to) => {
   // Public routes are always allowed
   if (to.meta?.public) {
-    // For public-only routes (login/register), redirect authenticated users
-    if (to.meta.publicOnly && (await getCurrentUser())) return '/dashboard'
+    // Prevent logged-in users from accessing login/register
+    if (to.meta.publicOnly && (await getCurrentUser())) {
+      return { path: '/dashboard' }
+    }
     return true
   }
 
   // Non-public routes require authentication
   const u = await getCurrentUser()
-  if (!u) return '/login'
+  if (!u) {
+    // Redirect to login with ?redirect=... parameter
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
 
-  // Role-protected routes (e.g., admin)
+  // Role-protected routes
   if (to.meta?.role) {
     const role = await getUserRole(u.uid)
-    if (to.meta.role === 'admin' && role !== 'admin') return '/dashboard'
+    if (to.meta.role === 'admin' && role !== 'admin') {
+      return { path: '/dashboard' }
+    }
   }
 
   return true

@@ -21,17 +21,29 @@ const error = ref('')
 const loading = ref(false)
 const resetMsg = ref('')
 
-// Prefill & redirect if already signed in
+// Normalize redirect target:
+// 1) Prefer ?redirect=/path
+// 2) If current path is /login/<anything>, treat it as redirect to /<anything>
+// 3) Fallback to /dashboard
+function getRedirectTarget() {
+  const q = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  const fromQuery = q ? ('/' + q.replace(/^\/+/, '')) : ''
+  const fromDeepLogin = route.path.startsWith('/login/')
+    ? '/' + route.path.replace(/^\/login\/+/, '')
+    : ''
+  const raw = fromQuery || fromDeepLogin || '/dashboard'
+  // Safety: internal path only
+  return raw.startsWith('/') ? raw : '/' + raw
+}
+
+// Prefill & auto-redirect if already signed in
 let stopAuthWatcher = null
 onMounted(() => {
   const qEmail = String(route.query.email || '').trim().toLowerCase()
   if (qEmail) email.value = qEmail
 
   stopAuthWatcher = onAuthStateChanged(auth, (u) => {
-    if (u) {
-      const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-      router.replace(target)
-    }
+    if (u) router.replace(getRedirectTarget())
   })
 })
 
@@ -61,8 +73,7 @@ async function login() {
     const normalizedEmail = email.value.trim().toLowerCase()
     // do NOT trim password
     await signInWithEmailAndPassword(auth, normalizedEmail, password.value)
-    const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-    router.push(target)
+    router.replace(getRedirectTarget())
   } catch (e) {
     error.value = mapAuthError(e)
   } finally {
@@ -144,7 +155,7 @@ async function resetPassword() {
           <button type="button" class="btn btn-link p-0 small" @click="resetPassword">
             Forgot password?
           </button>
-          <p class="small mb-0">
+            <p class="small mb-0">
             Don’t have an account?
             <RouterLink to="/register">Create one</RouterLink>
           </p>
