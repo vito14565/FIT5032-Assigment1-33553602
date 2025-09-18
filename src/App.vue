@@ -31,7 +31,19 @@
           Recipes
         </RouterLink>
 
-        <!-- Admin link -->
+        <!-- Tables (admin only) -->
+        <RouterLink
+          v-if="ready && role === 'admin'"
+          class="nav-link"
+          to="/tables"
+          :aria-disabled="role !== 'admin'"
+          :tabindex="role !== 'admin' ? -1 : 0"
+          @click.prevent="goOrWarn('/tables', true)"
+        >
+          Tables
+        </RouterLink>
+
+        <!-- Admin (admin only) -->
         <RouterLink
           v-if="ready && role === 'admin'"
           class="nav-link"
@@ -59,7 +71,12 @@
     </nav>
 
     <!-- Red notice banner -->
-    <div v-if="notice" class="alert alert-danger mx-3 mt-3 py-2 small" role="alert" aria-live="assertive">
+    <div
+      v-if="notice"
+      class="alert alert-danger mx-3 mt-3 py-2 small"
+      role="alert"
+      aria-live="assertive"
+    >
       {{ notice }}
     </div>
 
@@ -182,5 +199,11 @@ async function logout() {
   border: 1px solid #ccc;
   border-radius: 0.25rem;
   z-index: 1000;
+}
+
+/* 可選：讓目前頁面的 nav-link 更明顯 */
+.router-link-active.nav-link {
+  font-weight: 600;
+  color: #000;
 }
 </style>
