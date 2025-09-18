@@ -6,22 +6,22 @@ import router from './router'
 import { auth } from './firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 
-// --- 先載第三方 CSS，再載自訂樣式 ---
+// --- Load third-party CSS first, then custom styles ---
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap'
 
-// PrimeVue v3：核心與樣式
+// PrimeVue v3: core and styles
 import PrimeVue from 'primevue/config'
 import 'primeicons/primeicons.css'
 import 'primeflex/primeflex.css'
 
-// 主題 + PrimeVue 基礎樣式（v3 需要這兩條）
+// Theme + PrimeVue base styles (both required for v3)
 import 'primevue/resources/themes/aura-light-blue/theme.css'
 import 'primevue/resources/primevue.min.css'
 
 import './style.css'
 
-// --- 延後掛載（等 auth 狀態就緒，避免閃爍） ---
+// --- Delayed mount (wait for auth state to be ready to avoid flicker) ---
 let app
 onAuthStateChanged(auth, () => {
   if (!app) {

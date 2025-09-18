@@ -95,7 +95,7 @@
 
 <script setup>
 /**
- * Firestore 集合
+ * Firestore collection
  *  - recipes: { title, calories, tags[], createdAt? }
  *  - users:   { displayName, email, role, uid, createdAt? }
  */
@@ -197,45 +197,38 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 讓整體更乾淨、貼近你現有頁面的感覺 */
 .nice-table :deep(.p-datatable-header) { padding: 0; }
 .nice-table :deep(.p-datatable-wrapper) { border-radius: .5rem; }
 .nice-table :deep(.p-paginator) { border: 0; padding-top: .5rem; }
 
-/* 與卡片邊緣的距離（外層容器） */
 .search-wrap {
-  margin-left: 0.75rem;             /* 與卡片左邊緣保持距離 */
+  margin-left: 0.75rem;            
 }
 
-/* 強制使用 PrimeVue 標準的「內嵌 icon」定位，icon 一定在輸入框裡 */
 .p-input-icon-left {
   position: relative !important;
   display: inline-block !important;
 }
 .p-input-icon-left > i {
   position: absolute !important;
-  left: 0.9rem !important;          /* icon 與輸入框邊的距離 */
-  top: 50% !important;
+  left: 0.9rem !important;          
   transform: translateY(-50%) !important;
   color: #6c757d;
 }
 .p-input-icon-left > .p-inputtext {
-  padding-left: 2.6rem !important;  /* 讓文字不會壓到 icon */
+  padding-left: 2.6rem !important; 
   min-width: 260px;
 }
 
-/* 手機再多留空間避免擠邊 */
 @media (max-width: 576px) {
   .search-wrap { margin-left: 1rem; }
   .p-input-icon-left > .p-inputtext { min-width: 220px; }
 }
 
-/* PrimeVue 的表格字距稍調小一點 */
 .nice-table :deep(.p-datatable-thead > tr > th),
 .nice-table :deep(.p-datatable-tbody > tr > td) {
   padding: .6rem .75rem;
 }
 
-/* 卡片邊框/陰影更柔和 */
 .card { border-color: #e9ecef; }
 </style>

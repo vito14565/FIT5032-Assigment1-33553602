@@ -76,7 +76,7 @@ const filtered = computed(() => {
   })
 })
 
-// Submit handler to add a recipe（與舊 schema 一致）
+// Submit handler to add a recipe
 async function addRecipe() {
   error.value = ''
   success.value = ''
@@ -94,7 +94,7 @@ async function addRecipe() {
     return
   }
 
-  // 與舊資料一致：只存 title / calories / tags
+  // Consistent with old data: only store title / calories / tags
   const payload = { title, calories: caloriesNum, tags }
 
   try {
@@ -122,7 +122,7 @@ async function addRecipe() {
 <template>
   <h2 class="h4 mb-3 text-center">Recipe Library</h2>
 
-  <!-- Add Recipe Card：整體置中 + 限寬 -->
+  <!-- Add Recipe Card: centered overall + fixed width -->
   <div class="card mb-4 mx-auto add-card text-center">
     <div class="card-body">
       <h5 class="card-title mb-4">Add Recipe</h5>
@@ -232,7 +232,7 @@ async function addRecipe() {
 </template>
 
 <style scoped>
-/* Add Recipe：限寬 + 置中 */
+/* Add Recipe: fixed width + centered */
 .add-card { max-width: 720px; }
 .add-form { max-width: 600px; }
 

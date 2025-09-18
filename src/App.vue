@@ -201,7 +201,7 @@ async function logout() {
   z-index: 1000;
 }
 
-/* 可選：讓目前頁面的 nav-link 更明顯 */
+/* Optional: make the current page's nav-link more distinct */
 .router-link-active.nav-link {
   font-weight: 600;
   color: #000;
