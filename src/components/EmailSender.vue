@@ -77,7 +77,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { storage, auth } from "../firebase"; // 要帶 auth 才能知道 uid
+import { storage, auth } from "../firebase"; // Need to include auth to know the uid
 import { ref as sRef, uploadBytes } from "firebase/storage";
 
 /** --------- API Config ---------- */
@@ -119,16 +119,16 @@ async function sendEmail() {
       throw new Error("Recipient & subject are required.");
     }
 
-    // 必須登入才能上傳（符合 rules）
+    // Must be logged in to upload (to comply with rules)
     const u = auth.currentUser;
     if (!u) throw new Error("Please log in before uploading attachments.");
 
-    // (可選) 檔案基本檢查：10MB 以內
+    // (Optional) Basic file check: within 10MB
     if (file.value && file.value.size > 10 * 1024 * 1024) {
       throw new Error("Attachment too large (max 10 MB).");
     }
 
-    // 1) 有附件就上傳到 Storage（uploads/{uid}/...）
+    // 1) If there is an attachment, upload it to Storage (uploads/{uid}/...)
     let storagePath = "";
     if (file.value) {
       const cleanName = file.value.name.replace(/[^\w.\-]+/g, "_");
@@ -140,7 +140,7 @@ async function sendEmail() {
       );
     }
 
-    // 2) 發送 JSON
+    // 2) Send JSON
     const payload = {
       to: recipient.value,
       subject: subject.value,

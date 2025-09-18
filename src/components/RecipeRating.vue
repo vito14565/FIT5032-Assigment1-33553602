@@ -40,10 +40,10 @@ let stopRatings = null
 onMounted(() => {
   stopAuth = onAuthStateChanged(auth, (u) => {
     user.value = u || null
-    // 當登入者改變，重新抓自己的評分（在同一個 ratings 流內會同步）
+    // When the logged-in user changes, re-fetch their own rating (will stay in sync within the same ratings stream)
   })
 
-  // 監聽此食譜的所有評分以計算平均
+  // Listen to all ratings for this recipe to calculate the average
   const q = query(collection(db, 'recipes', props.recipeId, 'ratings'))
   stopRatings = onSnapshot(q, (snap) => {
     let sum = 0; let c = 0; let mine = 0

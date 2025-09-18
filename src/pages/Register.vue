@@ -31,7 +31,7 @@ let stopAuthWatcher = null
 onMounted(() => {
   stopAuthWatcher = onAuthStateChanged(auth, (user) => {
     if (user) {
-      // 已登入就導回 dashboard（或 redirect 指定頁）
+      // If already logged in, redirect to the dashboard (or a specified page)
       const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
       router.replace(target)
     }
