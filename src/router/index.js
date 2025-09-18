@@ -4,41 +4,48 @@ import { auth, db } from '../firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 
-// Basic pages
+// Eager-loaded pages（常用頁面可保留 eager）
 import Home from '../pages/Home.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import Recipes from '../pages/Recipes.vue'
 
-// Authentication pages
+// Auth pages
 import Login from '../pages/Login.vue'
 import Register from '../pages/Register.vue'
 
-// Admin-only page
+// Admin-only page（可保留 eager）
 import AdminPanel from '../pages/AdminPanel.vue'
 
+// Lazy-loaded: Tables（BR D.3）
+const Tables = () => import('../pages/Tables.vue')
+
 const routes = [
-  { path: '/', component: Home, meta: { public: true } },                 // Public route
-  { path: '/dashboard', component: Dashboard },                           // Requires authentication
-  { path: '/recipes', component: Recipes },                               // Requires authentication
-  { path: '/admin', component: AdminPanel, meta: { role: 'admin' } },     // Admin-only route
-  { path: '/login', component: Login, meta: { public: true, publicOnly: true } }, // Public-only
-  // Alias so URLs like /login/recipes are still handled by Login.vue
+  { path: '/', name: 'Home', component: Home, meta: { public: true } }, // Public
+  { path: '/dashboard', name: 'Dashboard', component: Dashboard },      // Auth required
+  { path: '/recipes', name: 'Recipes', component: Recipes },            // Auth required
+
+  // Admin routes
+  { path: '/admin', name: 'AdminPanel', component: AdminPanel, meta: { role: 'admin' } },
+  { path: '/tables', name: 'Tables', component: Tables, meta: { role: 'admin' } }, // <-- 新增
+
+  // Auth pages（publicOnly：登入中不可進）
+  { path: '/login', name: 'Login', component: Login, meta: { public: true, publicOnly: true } },
   { path: '/login/:rest(.*)?', component: Login, meta: { public: true, publicOnly: true } },
-  { path: '/register', component: Register, meta: { public: true, publicOnly: true } }, // Public-only
+  { path: '/register', name: 'Register', component: Register, meta: { public: true, publicOnly: true } },
+
+  // 可選：簡單 404（保持風格簡單）
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(), // 或 createWebHistory(import.meta.env.BASE_URL)
   routes,
 })
 
-/**
- * Resolve the current user session.
- * Returns the user object or null.
- */
+/** 取得目前使用者（已快取則同步回傳） */
 function getCurrentUser() {
   if (auth.currentUser) return Promise.resolve(auth.currentUser)
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const stop = onAuthStateChanged(auth, (user) => {
       stop()
       resolve(user)
@@ -46,38 +53,34 @@ function getCurrentUser() {
   })
 }
 
-/**
- * Fetch user role from Firestore users/{uid}.
- * Defaults to 'user' if the document does not exist.
- */
+/** 從 Firestore 取得使用者角色（users/{uid}.role），預設 'user' */
 async function getUserRole(uid) {
   const snap = await getDoc(doc(db, 'users', uid))
   return snap.exists() ? (snap.data().role || 'user') : 'user'
 }
 
-// Global navigation guard
+/** 全域守門員 */
 router.beforeEach(async (to) => {
-  // Public routes are always allowed
+  // 1) Public routes：總是允許
   if (to.meta?.public) {
-    // Prevent logged-in users from accessing login/register
+    // 已登入者不可進 publicOnly（login/register）
     if (to.meta.publicOnly && (await getCurrentUser())) {
-      return { path: '/dashboard' }
+      return { name: 'Dashboard' }
     }
     return true
   }
 
-  // Non-public routes require authentication
-  const u = await getCurrentUser()
-  if (!u) {
-    // Redirect to login with ?redirect=... parameter
+  // 2) 需要登入
+  const user = await getCurrentUser()
+  if (!user) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
 
-  // Role-protected routes
+  // 3) 需要角色（如 admin）
   if (to.meta?.role) {
-    const role = await getUserRole(u.uid)
+    const role = await getUserRole(user.uid)
     if (to.meta.role === 'admin' && role !== 'admin') {
-      return { path: '/dashboard' }
+      return { name: 'Dashboard' }
     }
   }
 
