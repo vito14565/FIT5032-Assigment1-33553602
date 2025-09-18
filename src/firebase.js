@@ -8,7 +8,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCRiZcmPYGpKL8XVYMSF9bbl5Rl9a5nwI0",
   authDomain: "nutrition-app-19cd7.firebaseapp.com",
   projectId: "nutrition-app-19cd7",
-  storageBucket: "nutrition-app-19cd7.appspot.com", // ✅ 修正這裡
+  storageBucket: "nutrition-app-19cd7.firebasestorage.app", // ✅ 修正這裡
   messagingSenderId: "886466181962",
   appId: "1:886466181962:web:76f54e0bc8b25034b59fb3",
 }

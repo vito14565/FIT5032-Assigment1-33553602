@@ -1,14 +1,13 @@
 // functions/index.js
 const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const functions = require("firebase-functions"); // 只為了讀 config()
 const admin = require("firebase-admin");
 const sgMail = require("@sendgrid/mail");
 
 if (!admin.apps.length) admin.initializeApp();
 setGlobalOptions({ maxInstances: 10 });
 
-exports.sendEmail = onRequest(async (req, res) => {
+exports.sendEmail = onRequest({ invoker: "public" }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(204).send();
@@ -18,28 +17,45 @@ exports.sendEmail = onRequest(async (req, res) => {
       return res.status(405).json({ ok: false, error: "Method not allowed" });
     }
 
-    // 1) 在 handler 內讀取金鑰（v2 仍支援 functions.config()；未來可改 .env/secrets）
-    const keyFromConfig = functions.config()?.sendgrid?.key;
-    const fromFromConfig = functions.config()?.sendgrid?.from;
-    const SENDGRID_KEY = process.env.SENDGRID_API_KEY || keyFromConfig;
-    const FROM_EMAIL  = process.env.SENDGRID_FROM || fromFromConfig;
-
+    const SENDGRID_KEY = process.env.SENDGRID_API_KEY;
+    const FROM_EMAIL   = process.env.SENDGRID_FROM;
     if (!SENDGRID_KEY || !FROM_EMAIL) {
-      return res.status(500).json({
-        ok: false,
-        error: "Missing SendGrid config: SENDGRID_API_KEY or SENDGRID_FROM",
-      });
+      console.error("❌ Missing env", { hasKey: !!SENDGRID_KEY, from: FROM_EMAIL });
+      return res.status(500).json({ ok: false, error: "Missing SendGrid config" });
     }
-
-    // 2) 只在需要時設定 API key
     sgMail.setApiKey(SENDGRID_KEY);
 
-    const { to, subject, text, storagePath } = req.body || {};
+    // ---- tolerant body parsing ----
+    const ctype = req.headers["content-type"] || "";
+    let body = req.body;
+
+    // 如果 body 不是物件（可能是字串或 undefined），試著解析 rawBody
+    if (!body || typeof body !== "object") {
+      try {
+        if (req.rawBody) {
+          body = JSON.parse(Buffer.from(req.rawBody).toString("utf8"));
+        }
+      } catch (e) {
+        console.warn("⚠️ Failed to parse rawBody as JSON");
+      }
+    }
+
+    // 映射舊欄位名 -> 新欄位名
+    const to        = body?.to        ?? body?.recipient ?? body?.email;
+    const subject   = body?.subject;
+    const text      = body?.text      ?? body?.message;
+    const storagePath = body?.storagePath;
+
     if (!to || !subject) {
+      console.error("❌ Missing fields after normalization", {
+        contentType: ctype,
+        bodyType: typeof body,
+        bodyPreview: typeof body === "object" ? Object.keys(body) : String(body).slice(0, 200)
+      });
       return res.status(400).json({ ok: false, error: "Missing to/subject" });
     }
 
-    // 3) 處理附件（可選）
+    // 附件（可選）：從 Storage 讀檔
     const attachments = [];
     if (storagePath) {
       const bucket = admin.storage().bucket();
@@ -58,7 +74,9 @@ exports.sendEmail = onRequest(async (req, res) => {
       });
     }
 
-    await sgMail.send({
+    console.log("📤 Sending", { from: FROM_EMAIL, to, subject, hasKey: !!SENDGRID_KEY });
+
+    const [resp] = await sgMail.send({
       to,
       from: FROM_EMAIL,
       subject,
@@ -66,9 +84,11 @@ exports.sendEmail = onRequest(async (req, res) => {
       attachments,
     });
 
+    console.log("✅ SendGrid", { statusCode: resp?.statusCode, messageId: resp?.headers?.["x-message-id"] });
     return res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ ok: false, error: e.message });
+    const details = e?.response?.body || e?.message || e;
+    console.error("❌ SendGrid error", details);
+    return res.status(500).json({ ok: false, error: e?.message || "Send failed" });
   }
 });
