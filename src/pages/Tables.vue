@@ -1,6 +1,6 @@
 <template>
   <div class="container py-4">
-    <h2 class="text-center mb-4">Interactive Tables</h2>
+    <h1 class="text-center mb-4">Interactive Tables</h1>
 
     <div class="row g-4 justify-content-center">
       <!-- ========== Recipes Card ========== -->
@@ -8,21 +8,32 @@
         <div class="card shadow-sm w-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-3">
-              <h5 class="card-title mb-0">Recipes</h5>
+              <h2 class="card-title h5 mb-0">Recipes</h2>
+
+              <!-- Global search with an accessible label -->
               <div class="ms-2 flex-shrink-0">
+                <label class="sr-only" for="recipes-search">Global search (Recipes)</label>
                 <span class="p-input-icon-left search-wrap">
-                  <i class="pi pi-search" />
-                  <InputText v-model="recipeGlobal" placeholder="Global search (Recipes)" />
+                  <i class="pi pi-search" aria-hidden="true" />
+                  <InputText
+                    id="recipes-search"
+                    v-model="recipeGlobal"
+                    placeholder="Global search (Recipes)"
+                    aria-label="Global search recipes"
+                  />
                 </span>
               </div>
             </div>
 
+            <!-- Data table: add aria-label; keep PrimeVue sorting/filtering behavior -->
+            <!-- Using v-model:first and @page to announce pagination changes -->
             <DataTable
               :value="recipes"
               dataKey="id"
               :loading="loading.recipes"
               :paginator="true"
-              :rows="10"
+              v-model:first="recipesFirst"
+              :rows="recipesRows"
               :rowsPerPageOptions="[10,20,50]"
               sortMode="multiple"
               filterDisplay="menu"
@@ -30,7 +41,14 @@
               :globalFilterFields="['title','caloriesStr','tagsStr','createdAtStr']"
               class="p-datatable-sm nice-table"
               responsiveLayout="scroll"
+              aria-label="Recipes table"
+              @page="onRecipesPage"
             >
+              <!-- Screen-reader-only caption to describe the table purpose -->
+              <template #caption>
+                <span class="sr-only">Table of recipe items with title, calories, tags and created date.</span>
+              </template>
+
               <template #empty> No recipes found. </template>
               <template #loading> Loading recipes... </template>
 
@@ -45,6 +63,11 @@
               </Column>
               <Column field="createdAtStr" header="Created" sortable filter />
             </DataTable>
+
+            <!-- Live region announcing current page for SR users -->
+            <p class="mt-2 small text-muted" aria-live="polite">
+              {{ recipesPageReport }}
+            </p>
           </div>
         </div>
       </div>
@@ -54,11 +77,19 @@
         <div class="card shadow-sm w-100">
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-3">
-              <h5 class="card-title mb-0">Users</h5>
+              <h2 class="card-title h5 mb-0">Users</h2>
+
+              <!-- Global search with an accessible label -->
               <div class="ms-2 flex-shrink-0">
+                <label class="sr-only" for="users-search">Global search (Users)</label>
                 <span class="p-input-icon-left search-wrap">
-                  <i class="pi pi-search" />
-                  <InputText v-model="userGlobal" placeholder="Global search (Users)" />
+                  <i class="pi pi-search" aria-hidden="true" />
+                  <InputText
+                    id="users-search"
+                    v-model="userGlobal"
+                    placeholder="Global search (Users)"
+                    aria-label="Global search users"
+                  />
                 </span>
               </div>
             </div>
@@ -68,7 +99,8 @@
               dataKey="id"
               :loading="loading.users"
               :paginator="true"
-              :rows="10"
+              v-model:first="usersFirst"
+              :rows="usersRows"
               :rowsPerPageOptions="[10,20,50]"
               sortMode="multiple"
               filterDisplay="menu"
@@ -76,7 +108,13 @@
               :globalFilterFields="['displayName','email','role','uid','createdAtStr']"
               class="p-datatable-sm nice-table"
               responsiveLayout="scroll"
+              aria-label="Users table"
+              @page="onUsersPage"
             >
+              <template #caption>
+                <span class="sr-only">Table of users with name, email, role, UID and created date.</span>
+              </template>
+
               <template #empty> No users found. </template>
               <template #loading> Loading users... </template>
 
@@ -86,6 +124,11 @@
               <Column field="uid" header="UID" sortable filter :showFilterMatchModes="false" />
               <Column field="createdAtStr" header="Created" sortable filter />
             </DataTable>
+
+            <!-- Live region announcing current page for SR users -->
+            <p class="mt-2 small text-muted" aria-live="polite">
+              {{ usersPageReport }}
+            </p>
           </div>
         </div>
       </div>
@@ -95,9 +138,8 @@
 
 <script setup>
 /**
- * Firestore collection
- *  - recipes: { title, calories, tags[], createdAt? }
- *  - users:   { displayName, email, role, uid, createdAt? }
+ * Firestore-backed tables with accessible search labels and live pagination status.
+ * PrimeVue provides good ARIA by default; we add clear names (aria-label) and live announcements.
  */
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { db } from '../firebase'
@@ -140,6 +182,7 @@ const userFilters = ref({
 const userGlobal = ref(null)
 watch(userGlobal, v => (userFilters.value.global.value = v))
 
+/** Convert timestamps to YYYY-MM-DD for display/filtering */
 function toDateStr(ts) {
   try {
     const d = ts?.toDate?.() ?? (ts instanceof Date ? ts : new Date(ts?.seconds ? ts.seconds * 1000 : ts))
@@ -149,6 +192,29 @@ function toDateStr(ts) {
     const dd = String(d.getDate()).padStart(2, '0')
     return `${y}-${m}-${dd}`
   } catch { return '' }
+}
+
+/* ---------- Live pagination status (SR-friendly) ---------- */
+/* We track the first row index and rows per page for each table, then announce a page report. */
+const recipesRows = 10
+const usersRows = 10
+const recipesFirst = ref(0)
+const usersFirst = ref(0)
+const recipesPageReport = ref('')
+const usersPageReport = ref('')
+
+function onRecipesPage(e) {
+  // e.first (start index), e.rows (page size)
+  recipesFirst.value = e.first
+  const page = Math.floor(e.first / e.rows) + 1
+  const totalPages = Math.max(1, Math.ceil(recipes.value.length / e.rows))
+  recipesPageReport.value = `Page ${page} of ${totalPages}`
+}
+function onUsersPage(e) {
+  usersFirst.value = e.first
+  const page = Math.floor(e.first / e.rows) + 1
+  const totalPages = Math.max(1, Math.ceil(users.value.length / e.rows))
+  usersPageReport.value = `Page ${page} of ${totalPages}`
 }
 
 onMounted(() => {
@@ -170,6 +236,8 @@ onMounted(() => {
       }
     })
     loading.value.recipes = false
+    // Initialize page report when data arrives
+    onRecipesPage({ first: recipesFirst.value, rows: recipesRows })
   }, () => (loading.value.recipes = false))
 
   // Users
@@ -187,6 +255,7 @@ onMounted(() => {
       }
     })
     loading.value.users = false
+    onUsersPage({ first: usersFirst.value, rows: usersRows })
   }, () => (loading.value.users = false))
 })
 
@@ -197,26 +266,24 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Keep PrimeVue visuals; add small tweaks */
 .nice-table :deep(.p-datatable-header) { padding: 0; }
 .nice-table :deep(.p-datatable-wrapper) { border-radius: .5rem; }
 .nice-table :deep(.p-paginator) { border: 0; padding-top: .5rem; }
 
-.search-wrap {
-  margin-left: 0.75rem;            
-}
+.search-wrap { margin-left: 0.75rem; }
 
-.p-input-icon-left {
-  position: relative !important;
-  display: inline-block !important;
-}
+/* Icon inside InputText */
+.p-input-icon-left { position: relative !important; display: inline-block !important; }
 .p-input-icon-left > i {
   position: absolute !important;
-  left: 0.9rem !important;          
+  left: 0.9rem !important;
   transform: translateY(-50%) !important;
+  top: 50%;
   color: #6c757d;
 }
 .p-input-icon-left > .p-inputtext {
-  padding-left: 2.6rem !important; 
+  padding-left: 2.6rem !important;
   min-width: 260px;
 }
 
@@ -228,6 +295,15 @@ onUnmounted(() => {
 .nice-table :deep(.p-datatable-thead > tr > th),
 .nice-table :deep(.p-datatable-tbody > tr > td) {
   padding: .6rem .75rem;
+}
+
+/* Screen reader only helper (in case global style isn't loaded) */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(1px,1px,1px,1px);
+  white-space: nowrap;
 }
 
 .card { border-color: #e9ecef; }
