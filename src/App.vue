@@ -8,7 +8,9 @@
       <a class="navbar-brand fw-bold">Health Hub</a>
 
       <div class="navbar-nav">
+        <!-- Public links -->
         <RouterLink class="nav-link" to="/">Home</RouterLink>
+        <RouterLink class="nav-link" to="/map">Healthy Map</RouterLink>
 
         <!-- Protected links -->
         <RouterLink
@@ -58,7 +60,7 @@
 
       <!-- Auth area -->
       <div class="ms-auto navbar-nav align-items-center">
-        <!-- Show Login/Register -->
+        <!-- Show Login/Register (public) -->
         <RouterLink v-if="ready && !user" class="nav-link" to="/login">Login</RouterLink>
         <RouterLink v-if="ready && !user" class="nav-link" to="/register">Register</RouterLink>
 
@@ -93,6 +95,13 @@
 </template>
 
 <script setup>
+/**
+ * App shell with:
+ * - Accessible skip link
+ * - Public + protected nav links
+ * - Role-based admin links
+ * - Notice banner for guard feedback
+ */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth, db } from './firebase'
@@ -101,13 +110,13 @@ import { doc, getDoc } from 'firebase/firestore'
 
 const router = useRouter()
 
-// State
+/* ---------------- State ---------------- */
 const user = ref(null)
 const role = ref(null)    // 'admin' | 'user' | null
 const ready = ref(false)
 const notice = ref('')
 
-// Notice timer
+/* ---------------- Notice helpers ---------------- */
 let noticeTimer = null
 function showNotice(msg) {
   notice.value = msg
@@ -118,7 +127,11 @@ function showNotice(msg) {
   }, 3000)
 }
 
-// Navigate or warn
+/**
+ * Navigate or show an inline warning:
+ * - If not signed in -> redirect to login with return URL
+ * - If admin route and role !== admin -> show warning
+ */
 function goOrWarn(path, needsAdmin = false) {
   if (!user.value) {
     showNotice('Please log in to access this page.')
@@ -131,15 +144,15 @@ function goOrWarn(path, needsAdmin = false) {
   router.push(path)
 }
 
-// Role cache
-function cacheRole(uid, role) {
-  localStorage.setItem(`role:${uid}`, role)
+/* ---------------- Role cache (localStorage) ---------------- */
+function cacheRole(uid, r) {
+  localStorage.setItem(`role:${uid}`, r)
 }
 function getCachedRole(uid) {
   return localStorage.getItem(`role:${uid}`)
 }
 
-// Auth watcher
+/* ---------------- Auth watcher ---------------- */
 let stopAuthWatcher = null
 onMounted(() => {
   stopAuthWatcher = onAuthStateChanged(auth, async (u) => {
@@ -148,6 +161,7 @@ onMounted(() => {
     ready.value = false
 
     if (u) {
+      // Use cached role for immediate UI, then refresh from Firestore
       const cached = getCachedRole(u.uid)
       if (cached) role.value = cached
 
@@ -170,7 +184,7 @@ onUnmounted(() => {
   if (typeof stopAuthWatcher === 'function') stopAuthWatcher()
 })
 
-// Logout
+/* ---------------- Logout ---------------- */
 async function logout() {
   const uid = user.value?.uid
   await signOut(auth)
@@ -180,7 +194,7 @@ async function logout() {
 </script>
 
 <style>
-/* Make skip link visible only on focus */
+/* Make the skip link visible only on focus */
 .visually-hidden-focusable {
   position: absolute;
   left: -999px;
@@ -201,7 +215,7 @@ async function logout() {
   z-index: 1000;
 }
 
-/* Optional: make the current page's nav-link more distinct */
+/* Highlight the active route link */
 .router-link-active.nav-link {
   font-weight: 600;
   color: #000;
