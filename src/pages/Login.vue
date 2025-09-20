@@ -21,10 +21,7 @@ const error = ref('')
 const loading = ref(false)
 const resetMsg = ref('')
 
-// Normalize redirect target:
-// 1) Prefer ?redirect=/path
-// 2) If current path is /login/<anything>, treat it as redirect to /<anything>
-// 3) Fallback to /dashboard
+// Normalize redirect target
 function getRedirectTarget() {
   const q = typeof route.query.redirect === 'string' ? route.query.redirect : ''
   const fromQuery = q ? ('/' + q.replace(/^\/+/, '')) : ''
@@ -32,7 +29,6 @@ function getRedirectTarget() {
     ? '/' + route.path.replace(/^\/login\/+/, '')
     : ''
   const raw = fromQuery || fromDeepLogin || '/dashboard'
-  // Safety: internal path only
   return raw.startsWith('/') ? raw : '/' + raw
 }
 
@@ -71,8 +67,7 @@ async function login() {
   loading.value = true
   try {
     const normalizedEmail = email.value.trim().toLowerCase()
-    // do NOT trim password
-    await signInWithEmailAndPassword(auth, normalizedEmail, password.value)
+    await signInWithEmailAndPassword(auth, normalizedEmail, password.value) // do NOT trim password
     router.replace(getRedirectTarget())
   } catch (e) {
     error.value = mapAuthError(e)
@@ -102,52 +97,74 @@ async function resetPassword() {
   <!-- Center the form vertically and horizontally -->
   <div class="d-flex justify-content-center align-items-center" style="min-height:70vh">
     <div class="w-100" style="max-width:480px">
-      <h2 class="h4 mb-3 text-center">Login</h2>
+      <h1 class="h4 mb-3 text-center" id="login-title">Login</h1>
 
       <!-- Card-style form -->
       <form
         class="vstack gap-3 p-4 border rounded-3 bg-white shadow-sm"
         @submit.prevent="login"
         novalidate
-        aria-label="Login form"
+        aria-labelledby="login-title"
       >
         <!-- Email -->
-        <input
-          class="form-control"
-          v-model.trim="email"
-          type="email"
-          placeholder="Email"
-          autocomplete="email"
-          required
-          autofocus
-        />
-
-        <!-- Password (do NOT trim password) + show/hide -->
-        <div class="input-group">
+        <div>
+          <label class="form-label" for="email">Email</label>
           <input
+            id="email"
             class="form-control"
-            :type="showPwd ? 'text' : 'password'"
-            v-model="password"
-            placeholder="Password"
-            minlength="6"
-            autocomplete="current-password"
+            v-model.trim="email"
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            autocomplete="email"
             required
+            :aria-describedby="`email-help${error ? ' auth-err' : ''}`"
+            :aria-invalid="!!error && !resetMsg"
+            autofocus
           />
-          <button
-            class="btn btn-outline-secondary"
-            type="button"
-            @click="showPwd = !showPwd"
-            aria-label="Toggle password visibility"
-          >
-            {{ showPwd ? 'Hide' : 'Show' }}
-          </button>
+          <p id="email-help" class="sr-only">Enter your email address.</p>
+        </div>
+
+        <!-- Password (no trim) + show/hide -->
+        <div>
+          <label class="form-label" for="password">Password</label>
+          <div class="input-group">
+            <input
+              id="password"
+              class="form-control"
+              :type="showPwd ? 'text' : 'password'"
+              v-model="password"
+              name="password"
+              placeholder="Your password"
+              minlength="6"
+              autocomplete="current-password"
+              required
+              :aria-describedby="`pwd-help${error ? ' auth-err' : ''}`"
+              :aria-invalid="!!error && !resetMsg"
+            />
+            <button
+              class="btn btn-outline-secondary"
+              type="button"
+              @click="showPwd = !showPwd"
+              :aria-pressed="showPwd ? 'true' : 'false'"
+              aria-label="Toggle password visibility"
+              aria-controls="password"
+            >
+              {{ showPwd ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+          <p id="pwd-help" class="sr-only">Password must be at least 6 characters.</p>
         </div>
 
         <!-- Error and success messages -->
-        <div class="text-danger small" v-if="error" role="alert" aria-live="assertive">{{ error }}</div>
-        <div class="text-success small" v-if="resetMsg" role="status" aria-live="polite">{{ resetMsg }}</div>
+        <div v-if="error" id="auth-err" class="text-danger small" role="alert" aria-live="assertive">
+          {{ error }}
+        </div>
+        <div v-if="resetMsg" class="text-success small" role="status" aria-live="polite">
+          {{ resetMsg }}
+        </div>
 
-        <button class="btn btn-primary w-100" :disabled="loading" :aria-busy="loading">
+        <button class="btn btn-primary w-100" :disabled="loading" :aria-busy="loading" type="submit">
           {{ loading ? 'Signing in…' : 'Login' }}
         </button>
 
@@ -155,7 +172,7 @@ async function resetPassword() {
           <button type="button" class="btn btn-link p-0 small" @click="resetPassword">
             Forgot password?
           </button>
-            <p class="small mb-0">
+          <p class="small mb-0">
             Don’t have an account?
             <RouterLink to="/register">Create one</RouterLink>
           </p>
