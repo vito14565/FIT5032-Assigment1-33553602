@@ -9,6 +9,13 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 const router = useRouter()
 const route = useRoute()
 
+// -------- helpers: normalize internal redirect target --------
+function normalizeRedirect(v, fallback = '/dashboard') {
+  const raw = typeof v === 'string' && v ? v : fallback
+  const trimmed = raw.replace(/^\s+|\s+$/g, '')
+  return trimmed.startsWith('/') ? trimmed : '/' + trimmed
+}
+
 // Form state
 const email = ref('')
 const password = ref('')
@@ -31,15 +38,12 @@ let stopAuthWatcher = null
 onMounted(() => {
   stopAuthWatcher = onAuthStateChanged(auth, (user) => {
     if (user) {
-      // If already logged in, redirect to the dashboard (or a specified page)
-      const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
+      const target = normalizeRedirect(route.query.redirect)
       router.replace(target)
     }
   })
 })
-onUnmounted(() => {
-  if (typeof stopAuthWatcher === 'function') stopAuthWatcher()
-})
+onUnmounted(() => { if (typeof stopAuthWatcher === 'function') stopAuthWatcher() })
 
 // Map Firebase errors to friendly messages
 function mapAuthError(e) {
@@ -76,12 +80,18 @@ async function register() {
     }
 
     // Redirect to intended page or dashboard
-    const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
+    const target = normalizeRedirect(route.query.redirect)
     router.push(target)
   } catch (e) {
     const msg = mapAuthError(e)
     if ((e?.code || '').toLowerCase().includes('email-already-in-use')) {
-      router.push({ path: '/login', query: { email: email.value.trim().toLowerCase(), redirect: route.query.redirect } })
+      router.push({
+        path: '/login',
+        query: {
+          email: email.value.trim().toLowerCase(),
+          redirect: route.query.redirect
+        }
+      })
     } else {
       error.value = msg
     }
@@ -94,54 +104,68 @@ async function register() {
 <template>
   <div class="d-flex justify-content-center align-items-center" style="min-height:70vh">
     <div class="w-100" style="max-width:480px">
-      <h2 class="h4 mb-3 text-center">Register</h2>
+      <h1 class="h4 mb-3 text-center" id="register-title">Register</h1>
 
       <form
         class="vstack gap-3 p-4 border rounded-3 bg-white shadow-sm"
         @submit.prevent="register"
         novalidate
-        aria-label="Registration form"
+        aria-labelledby="register-title"
       >
         <!-- Email -->
         <div>
+          <label class="form-label" for="reg-email">Email</label>
           <input
+            id="reg-email"
             class="form-control"
             v-model.trim="email"
             type="email"
-            placeholder="Email"
+            name="email"
+            placeholder="you@example.com"
             autocomplete="email"
             required
-            :aria-invalid="email && !emailOk"
-            :class="{ 'is-invalid': email && !emailOk }"
+            :aria-describedby="`email-help${(email && !emailOk) ? ' email-err' : ''}`"
+            :aria-invalid="!!(email && !emailOk)"
             autofocus
           />
-          <div class="invalid-feedback">Please enter a valid email address.</div>
+          <p id="email-help" class="sr-only">Enter a valid email address.</p>
+          <div v-if="email && !emailOk" id="email-err" class="invalid-feedback d-block">
+            Please enter a valid email address.
+          </div>
         </div>
 
         <!-- Password (do NOT trim password) -->
-        <div class="input-group">
-          <input
-            class="form-control"
-            :type="showPwd ? 'text' : 'password'"
-            v-model="password"
-            placeholder="Password (min 6 chars)"
-            minlength="6"
-            autocomplete="new-password"
-            required
-            :aria-invalid="password && !pwdOk"
-            :class="{ 'is-invalid': password && !pwdOk }"
-          />
-          <button
-            class="btn btn-outline-secondary"
-            type="button"
-            @click="showPwd = !showPwd"
-            aria-label="Toggle password visibility"
-          >
-            {{ showPwd ? 'Hide' : 'Show' }}
-          </button>
-        </div>
-        <div class="invalid-feedback d-block" v-if="password && !pwdOk">
-          Password should be at least 6 characters.
+        <div>
+          <label class="form-label" for="reg-password">Password</label>
+          <div class="input-group">
+            <input
+              id="reg-password"
+              class="form-control"
+              :type="showPwd ? 'text' : 'password'"
+              v-model="password"
+              name="new-password"
+              placeholder="Password (min 6 chars)"
+              minlength="6"
+              autocomplete="new-password"
+              required
+              :aria-describedby="`pwd-help${(password && !pwdOk) ? ' pwd-err' : ''}`"
+              :aria-invalid="!!(password && !pwdOk)"
+            />
+            <button
+              class="btn btn-outline-secondary"
+              type="button"
+              @click="showPwd = !showPwd"
+              :aria-pressed="showPwd ? 'true' : 'false'"
+              aria-label="Toggle password visibility"
+              aria-controls="reg-password"
+            >
+              {{ showPwd ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+          <p id="pwd-help" class="sr-only">Password must be at least 6 characters.</p>
+          <div v-if="password && !pwdOk" id="pwd-err" class="invalid-feedback d-block">
+            Password should be at least 6 characters.
+          </div>
         </div>
 
         <!-- Error -->
@@ -149,7 +173,7 @@ async function register() {
           {{ error }}
         </div>
 
-        <button class="btn btn-success w-100" :disabled="!canSubmit || loading" :aria-busy="loading">
+        <button class="btn btn-success w-100" :disabled="!canSubmit || loading" :aria-busy="loading" type="submit">
           <span v-if="loading">Creating…</span>
           <span v-else>Create account</span>
         </button>
