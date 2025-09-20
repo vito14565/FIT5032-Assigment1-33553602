@@ -76,6 +76,13 @@ const filtered = computed(() => {
   })
 })
 
+// Simple field validations for a11y hints
+const titleInvalid = computed(() => form.value.title.trim() === '')
+const caloriesInvalid = computed(() => {
+  const n = Number(form.value.calories)
+  return Number.isNaN(n) || n < 0
+})
+
 // Submit handler to add a recipe
 async function addRecipe() {
   error.value = ''
@@ -120,40 +127,63 @@ async function addRecipe() {
 </script>
 
 <template>
-  <h2 class="h4 mb-3 text-center">Recipe Library</h2>
+  <!-- Use h1 as the page main heading for SR users -->
+  <h1 class="h4 mb-3 text-center">Recipe Library</h1>
 
   <!-- Add Recipe Card: centered overall + fixed width -->
-  <div class="card mb-4 mx-auto add-card text-center">
+  <div class="card mb-4 mx-auto add-card text-center" aria-labelledby="add-recipe-title">
     <div class="card-body">
-      <h5 class="card-title mb-4">Add Recipe</h5>
+      <!-- Section heading -->
+      <h2 id="add-recipe-title" class="card-title mb-4 h5">Add Recipe</h2>
 
-      <div class="mx-auto add-form">
+      <!-- Real HTML form for better semantics and keyboard submit -->
+      <form class="mx-auto add-form" @submit.prevent="addRecipe" aria-describedby="add-recipe-help">
+        <p id="add-recipe-help" class="sr-only">
+          Fields marked with asterisk are required.
+        </p>
+
         <!-- Title -->
         <div class="mb-3 text-start">
-          <label class="form-label">Title<span class="text-danger">*</span></label>
+          <label class="form-label" for="recipe-title">
+            Title <span class="text-danger" aria-hidden="true">*</span>
+          </label>
           <input
+            id="recipe-title"
             class="form-control text-center"
             v-model.trim="form.title"
             placeholder="e.g., Grilled Chicken Salad"
+            :aria-invalid="titleInvalid ? 'true' : 'false'"
+            aria-describedby="title-hint"
+            required
           />
+          <div id="title-hint" class="form-text">Provide a descriptive recipe title.</div>
         </div>
 
         <!-- Calories -->
         <div class="mb-3 text-start">
-          <label class="form-label">Calories<span class="text-danger">*</span></label>
+          <label class="form-label" for="recipe-calories">
+            Calories <span class="text-danger" aria-hidden="true">*</span>
+          </label>
           <input
+            id="recipe-calories"
             class="form-control text-center"
             v-model.number="form.calories"
             type="number"
             min="0"
+            inputmode="numeric"
             placeholder="e.g., 520"
+            :aria-invalid="caloriesInvalid ? 'true' : 'false'"
+            aria-describedby="calories-hint"
+            required
           />
+          <div id="calories-hint" class="form-text">Enter a non-negative number.</div>
         </div>
 
         <!-- Tags -->
         <div class="mb-4 text-start">
-          <label class="form-label">Tags (comma separated)</label>
+          <label class="form-label" for="recipe-tags">Tags (comma separated)</label>
           <input
+            id="recipe-tags"
             class="form-control text-center"
             v-model.trim="form.tagsText"
             placeholder="lunch, high-protein"
@@ -162,50 +192,86 @@ async function addRecipe() {
 
         <!-- Submit button -->
         <div class="d-flex justify-content-center">
-          <button class="btn btn-primary px-5" :disabled="saving" @click="addRecipe">
+          <button
+            class="btn btn-primary px-5"
+            type="submit"
+            :disabled="saving"
+            :aria-busy="saving ? 'true' : 'false'"
+          >
             {{ saving ? 'Saving...' : 'Add' }}
           </button>
         </div>
 
-        <!-- Messages -->
+        <!-- Messages: assertive for errors, polite for success -->
         <div class="mt-3" v-if="error">
-          <div class="alert alert-danger py-2 mb-0">{{ error }}</div>
+          <div class="alert alert-danger py-2 mb-0" role="alert" aria-live="assertive">
+            {{ error }}
+          </div>
         </div>
         <div class="mt-3" v-if="success">
-          <div class="alert alert-success py-2 mb-0">{{ success }}</div>
+          <div class="alert alert-success py-2 mb-0" aria-live="polite">
+            {{ success }}
+          </div>
         </div>
-      </div>
+      </form>
     </div>
   </div>
 
-  <!-- Filters -->
-  <div class="row row-cols-1 row-cols-md-3 g-2 mb-3 filters">
+  <!-- Filters: provide hidden labels so SR can identify each control -->
+  <div class="row row-cols-1 row-cols-md-3 g-2 mb-3 filters" role="group" aria-label="Recipe filters">
     <div class="col">
-      <input class="form-control w-100" v-model.trim="qText" placeholder="Search by title or tag..." />
+      <label for="filter-text" class="sr-only">Search by title or tag</label>
+      <input
+        id="filter-text"
+        class="form-control w-100"
+        v-model.trim="qText"
+        placeholder="Search by title or tag..."
+      />
     </div>
     <div class="col">
-      <input class="form-control w-100" v-model.number="minCal" type="number" min="0" placeholder="Min calories" />
+      <label for="filter-min" class="sr-only">Minimum calories</label>
+      <input
+        id="filter-min"
+        class="form-control w-100"
+        v-model.number="minCal"
+        type="number"
+        min="0"
+        inputmode="numeric"
+        placeholder="Min calories"
+      />
     </div>
     <div class="col">
-      <input class="form-control w-100" v-model.number="maxCal" type="number" min="0" placeholder="Max calories" />
+      <label for="filter-max" class="sr-only">Maximum calories</label>
+      <input
+        id="filter-max"
+        class="form-control w-100"
+        v-model.number="maxCal"
+        type="number"
+        min="0"
+        inputmode="numeric"
+        placeholder="Max calories"
+      />
     </div>
   </div>
 
   <!-- States -->
-  <div v-if="loading" class="alert alert-info">Loading recipes...</div>
-  <div v-else-if="error && !success" class="alert alert-danger">{{ error }}</div>
+  <div v-if="loading" class="alert alert-info" aria-live="polite">Loading recipes...</div>
+  <div v-else-if="error && !success" class="alert alert-danger" role="alert" aria-live="assertive">{{ error }}</div>
 
-  <!-- Results grid：固定 3 欄，最後一列置中；卡片等寬等高 -->
-  <div v-else class="row g-3 justify-content-center">
+  <!-- Results grid: role=list makes semantics clear for SR; items as listitem -->
+  <div v-else class="row g-3 justify-content-center" role="list" aria-label="Recipe results">
     <div
       v-for="r in filtered"
       :key="r.id"
       class="col-12 col-md-6 col-lg-4 d-flex"
+      role="listitem"
     >
       <div class="card h-100 w-100">
         <div class="card-body text-center d-flex flex-column">
-          <h5 class="card-title">{{ r.title }}</h5>
-          <p class="card-text mb-2">Calories: {{ r.calories }}</p>
+          <h3 class="h5 card-title">{{ r.title }}</h3>
+          <p class="card-text mb-2">
+            <span v-if="typeof r.calories === 'number'">Calories: {{ r.calories }}</span>
+          </p>
 
           <div class="mb-2">
             <span
@@ -217,6 +283,7 @@ async function addRecipe() {
             </span>
           </div>
 
+          <!-- Keep rating UI; assume it is accessible internally -->
           <div class="mt-auto">
             <RecipeRating :recipe-id="r.id" />
           </div>
@@ -226,7 +293,7 @@ async function addRecipe() {
 
     <!-- Empty state -->
     <div class="col-12" v-if="filtered.length === 0">
-      <div class="alert alert-warning text-center">No recipes match your filters.</div>
+      <div class="alert alert-warning text-center" aria-live="polite">No recipes match your filters.</div>
     </div>
   </div>
 </template>
@@ -247,5 +314,14 @@ async function addRecipe() {
 }
 .filters input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* Screen-reader-only utility (in case global isn't loaded in tests) */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(1px,1px,1px,1px);
+  white-space: nowrap;
 }
 </style>
