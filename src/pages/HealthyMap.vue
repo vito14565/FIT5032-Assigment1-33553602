@@ -8,21 +8,32 @@ const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const mapEl = ref(null);
 const destInput = ref(null);
 
+/* Travel mode / POI / TTS toggle */
 const mode = ref("WALKING");
 const poi = ref("supermarket");
 const speak = ref(true); // Voice TTS toggle
-const fromAddr = ref("Locating your position…");
 
+/* Address + routing states */
+const fromAddr = ref("Locating your position…");
 const canRoute = ref(false);
 const hasRoute = ref(false);
 const navigating = ref(false);
+
+/* HUD values */
 const nextHint = ref("Pick a destination to start");
 const remainKm = ref("—");
 const etaMin = ref("—");
 
-// From manual entry
+/* Manual "From" editor */
 const fromInputEl = ref(null);
 const editingFrom = ref(false);
+
+/* A11y: live regions */
+const statusText = ref("Map ready.");          // polite updates (e.g., route ready, search done)
+const alertText = ref("");                     // assertive alerts (e.g., critical failures)
+
+/* A11y: map busy while routing */
+const routing = ref(false);                    // true during directionsService.route
 
 let map, directionsService, directionsRenderer, autocomplete;
 let placesSvc, infoWin;
@@ -33,17 +44,17 @@ let destPlaceId = null;   // destination place_id (optional)
 let watchId = null;       // geolocation watch id
 let fromAutocomplete = null; // Places Autocomplete for "From"
 
-// Custom route appearance
+/* Route rendering */
 let routePoly = null;     // blue main stroke
 let routeCasing = null;   // black outer casing
 
-// Navigation / prompts
+/* Navigation / prompts */
 let lastSpokenKey = "";   // de-duplicate TTS
 let currentRoute = null;  // DirectionsRoute
 let stepEnds = [];        // end_location of each step (LatLng[])
 let stepTexts = [];       // plain-text instructions of each step
 
-// Camera (heading/zoom while navigating)
+/* Camera */
 let prevLL = null;        // previous location to estimate heading
 
 /** ====== helpers ====== **/
@@ -53,7 +64,10 @@ function loadGoogle(cb) {
   s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_KEY}&libraries=places&v=weekly`;
   s.async = true;
   s.onload = cb;
-  s.onerror = () => console.error("Failed to load Google Maps JS (check API key / billing).");
+  s.onerror = () => {
+    console.error("Failed to load Google Maps JS (check API key / billing).");
+    alertText.value = "Failed to load map script.";
+  };
   document.head.appendChild(s);
 }
 
@@ -63,6 +77,7 @@ function stripHtml(html) {
   return div.textContent || div.innerText || "";
 }
 
+/* Speak once (toggleable) */
 function speakOnce(key, text) {
   if (!speak.value) return;
   if (lastSpokenKey === key) return;
@@ -83,6 +98,7 @@ function reverseGeocode(ll, onDone) {
 function clearPOIs() {
   poiMarkers.forEach(m => m.setMap(null));
   poiMarkers = [];
+  statusText.value = "Cleared previous results.";
 }
 
 function clearRouteGraphics() {
@@ -147,6 +163,7 @@ function todayHours(opening_hours) {
 function pill(open) {
   return `<span style="display:inline-block;background:${open ? "#16a34a" : "#ef4444"};color:#fff;padding:2px 8px;border-radius:999px;font-weight:700;font-size:12px">${open ? "Open" : "Closed"}</span>`;
 }
+
 function showPlaceDetails(placeId, anchorMarker) {
   placesSvc.getDetails(
     {
@@ -162,7 +179,7 @@ function showPlaceDetails(placeId, anchorMarker) {
 
       const html = `
         <div style="font:14px/1.4 system-ui;max-width:320px">
-          ${photo ? `<img src="${photo}" style="width:100%;border-radius:8px;margin-bottom:6px">` : ""}
+          ${photo ? `<img src="${photo}" alt="" aria-hidden="true" style="width:100%;border-radius:8px;margin-bottom:6px">` : ""}
           <div style="display:flex;align-items:center;gap:6px">
             <strong>${place.name || "Place"}</strong>
             ${openNow != null ? pill(openNow) : ""}
@@ -189,6 +206,7 @@ function showPlaceDetails(placeId, anchorMarker) {
           placeDest(destLL);
           if (destInput?.value) destInput.value.value = place.formatted_address || place.name || "";
           canRoute.value = !!(userLL && destLL);
+          statusText.value = "Destination selected. Calculating route…";
           routeNow();
           infoWin.close();
         };
@@ -202,11 +220,11 @@ function ensureYouMarker() {
   if (!userLL || !map) return;
   const icon = {
     path: google.maps.SymbolPath.CIRCLE,
-    scale: 10,              // bigger to be obvious
-    fillColor: "#10b981",   // green
+    scale: 10,
+    fillColor: "#10b981",
     fillOpacity: 1,
     strokeWeight: 3,
-    strokeColor: "#ffffff", // white ring
+    strokeColor: "#ffffff",
   };
   if (!youMarker) {
     youMarker = new google.maps.Marker({
@@ -256,8 +274,9 @@ function initMap() {
     destPlaceId = p.place_id || null;
     placeDest(destLL);
     canRoute.value = !!(userLL && destLL);
+    statusText.value = "Destination selected.";
     if (destPlaceId) showPlaceDetails(destPlaceId, destMarker);
-    // user clicks "Find Routes"
+    // Wait for user to click "Find Routes"
   });
 
   // Auto locate user
@@ -267,10 +286,11 @@ function initMap() {
       map.setCenter(userLL);
       map.setZoom(14);
       reverseGeocode(userLL, (addr) => (fromAddr.value = addr));
-      ensureYouMarker();                 // <<< show green dot
+      ensureYouMarker();                 // show green dot
       canRoute.value = !!(userLL && destLL);
+      statusText.value = "Your location is set.";
     },
-    () => { fromAddr.value = "Location permission denied"; },
+    () => { fromAddr.value = "Location permission denied"; alertText.value = "Location permission denied."; },
     { enableHighAccuracy: true, timeout: 8000 }
   );
 }
@@ -318,6 +338,8 @@ function drawPolyline(path) {
 function routeNow() {
   if (!userLL || !destLL) return;
   clearRouteGraphics();
+  routing.value = true;                        // a11y: mark map busy during routing
+  statusText.value = "Calculating route…";
 
   const travelMode = google.maps.TravelMode[mode.value];
   directionsService.route(
@@ -328,8 +350,10 @@ function routeNow() {
       provideRouteAlternatives: false,
     },
     (res, status) => {
+      routing.value = false;
       if (status !== "OK" || !res) {
         console.warn("Directions failed:", status);
+        alertText.value = "Directions request failed.";
         return;
       }
       currentRoute = res.routes[0];
@@ -346,6 +370,7 @@ function routeNow() {
       remainKm.value = (leg.distance?.value ? (leg.distance.value / 1000).toFixed(1) : "—");
       etaMin.value = (leg.duration?.value ? Math.round(leg.duration.value / 60) : "—");
 
+      statusText.value = `Route ready. ${remainKm.value} km, about ${etaMin.value} minutes.`;
       map.fitBounds(currentRoute.bounds, { padding: 60 });
     }
   );
@@ -358,8 +383,12 @@ function searchHere() {
   const bounds = map.getBounds();
   if (!bounds) return;
 
+  statusText.value = `Searching “${poi.value}” in this area…`;
   placesSvc.textSearch({ query: poi.value, bounds }, (results, status) => {
-    if (status !== "OK" || !results) return;
+    if (status !== "OK" || !results) {
+      alertText.value = "No results found.";
+      return;
+    }
     results.slice(0, 20).forEach(r => {
       if (!r.geometry?.location) return;
       const m = new google.maps.Marker({
@@ -384,27 +413,31 @@ function searchHere() {
             if (destInput?.value) destInput.value.value = addr;
           });
           canRoute.value = !!(userLL && destLL);
+          statusText.value = "Destination selected. Calculating route…";
           routeNow();
         }
       });
       poiMarkers.push(m);
     });
+    statusText.value = `Found ${results.length} result(s).`;
   });
 }
 
 /** ====== Re-locate (refresh user position) ====== **/
 function reLocate() {
+  statusText.value = "Locating your position…";
   navigator.geolocation?.getCurrentPosition(
     (pos) => {
       userLL = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       map.panTo(userLL);
       reverseGeocode(userLL, (addr) => (fromAddr.value = addr));
-      ensureYouMarker();                 // <<< keep green dot in sync
+      ensureYouMarker();                 // keep green dot in sync
       canRoute.value = !!(userLL && destLL);
       closeFromEditor();
       if (destLL) routeNow();
+      statusText.value = "Location updated.";
     },
-    () => {},
+    () => { alertText.value = "Unable to get your location."; },
     { enableHighAccuracy: true, timeout: 8000 }
   );
 }
@@ -415,6 +448,7 @@ function startNavigation() {
   navigating.value = true;
   lastSpokenKey = "";
   speakOnce("nav-start", "Navigation started. Follow the blue line.");
+  statusText.value = "Navigation started.";
 
   infoWin?.close?.();
 
@@ -439,7 +473,7 @@ function startNavigation() {
 
       updateProgressAndHints(userLL);
     },
-    () => {},
+    () => { alertText.value = "Lost GPS signal."; },
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 8000 }
   );
 }
@@ -453,6 +487,7 @@ function stopNavigation() {
   lastSpokenKey = "";
   prevLL = null;
   clearRouteGraphics();
+  statusText.value = "Navigation stopped.";
 }
 
 // Simple Haversine (meters)
@@ -477,7 +512,7 @@ function updateProgressAndHints(me) {
     if (d > 50) { nextIdx = i; break; }
   }
   const hint = stepTexts[nextIdx] || "Continue";
-  nextHint.value = hint;
+  nextHint.value = hint;                 // HUD text (we also expose it below in a live region)
 
   try {
     const dToNext = hav(me, { lat: stepEnds[nextIdx].lat(), lng: stepEnds[nextIdx].lng() });
@@ -500,6 +535,7 @@ function updateProgressAndHints(me) {
   if (hav(me, { lat: end.lat(), lng: end.lng() }) < 60) {
     nextHint.value = "You have arrived.";
     speakOnce("arrived", "You have arrived.");
+    statusText.value = "You have arrived.";
     stopNavigation();
   }
 }
@@ -520,6 +556,7 @@ function openFromEditor() {
       map.panTo(userLL);
       ensureYouMarker();                 // ensure green dot exists after manual set
       canRoute.value = !!(userLL && destLL);
+      statusText.value = "Start location updated.";
     });
   });
 }
@@ -545,8 +582,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="hm-card" aria-label="Healthy Map">
-    <h2 class="hm-title">Plan Your Route</h2>
+  <!-- Section landmark with an explicit name via aria-labelledby -->
+  <section class="hm-card" :aria-labelledby="'map-title'">
+    <!-- Page/section title -->
+    <h2 id="map-title" class="hm-title">Plan Your Route</h2>
+
+    <!-- Live regions for screen readers -->
+    <!-- Polite status updates (route ready, search done, etc.) -->
+    <p class="small text-muted" aria-live="polite">{{ statusText }}</p>
+    <!-- Assertive alerts for failures or important notices -->
+    <p v-if="alertText" class="small text-danger" role="alert" aria-live="assertive">{{ alertText }}</p>
 
     <!-- From -->
     <div class="hm-row">
@@ -554,7 +599,7 @@ onBeforeUnmount(() => {
 
       <!-- Display mode -->
       <div v-if="!editingFrom" class="hm-from">
-        <span class="hm-dot"></span>
+        <span class="hm-dot" aria-hidden="true"></span>
         <span class="hm-addr">{{ fromAddr }}</span>
         <div class="hm-from-actions">
           <button class="hm-ghost" type="button" @click="reLocate">Use current</button>
@@ -581,12 +626,18 @@ onBeforeUnmount(() => {
 
     <!-- Destination -->
     <div class="hm-row">
-      <label class="hm-label">Destination</label>
-      <input ref="destInput" class="hm-input" placeholder="Search places (e.g., Monash University, QV, State Library)" />
+      <label class="hm-label" for="dest-input">Destination</label>
+      <input
+        id="dest-input"
+        ref="destInput"
+        class="hm-input"
+        placeholder="Search places (e.g., Monash University, QV, State Library)"
+        aria-label="Destination"
+      />
     </div>
 
-    <!-- Toolbar -->
-    <div class="hm-toolbar">
+    <!-- Toolbar: group of map controls with a clear name; link to the map via aria-controls -->
+    <div class="hm-toolbar" role="group" aria-label="Map controls" aria-controls="hm-map">
       <select v-model="mode" class="hm-select" aria-label="Travel mode">
         <option value="WALKING">Walking</option>
         <option value="BICYCLING">Cycling</option>
@@ -609,8 +660,17 @@ onBeforeUnmount(() => {
       </label>
     </div>
 
-    <!-- Map -->
-    <div ref="mapEl" class="hm-map"></div>
+    <!-- Map: focusable region with roledescription; mark busy while routing -->
+    <div
+      id="hm-map"
+      ref="mapEl"
+      class="hm-map"
+      role="region"
+      :aria-roledescription="'interactive map'"
+      tabindex="0"
+      :aria-busy="routing ? 'true' : 'false'"
+      :aria-label="'Map viewport'"
+    ></div>
 
     <!-- Actions -->
     <div class="hm-actions">
@@ -637,8 +697,8 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <!-- HUD -->
-    <div v-if="hasRoute" class="hud">
+    <!-- HUD (next instruction is also useful to announce continuously while navigating) -->
+    <div v-if="hasRoute" class="hud" aria-label="Route status">
       <div class="hud-item">
         <div class="hud-num">{{ remainKm }}</div>
         <div class="hud-label">km left</div>
@@ -647,7 +707,8 @@ onBeforeUnmount(() => {
         <div class="hud-num">{{ etaMin }}</div>
         <div class="hud-label">min ETA</div>
       </div>
-      <div class="hud-next">{{ nextHint }}</div>
+      <!-- Make next step polite live so SR users hear updates as they move -->
+      <div class="hud-next" aria-live="polite">{{ nextHint }}</div>
     </div>
   </section>
 </template>
