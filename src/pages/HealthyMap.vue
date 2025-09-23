@@ -154,6 +154,36 @@ function flyCamera(center, { zoom, tilt = 65, heading } = {}) {
   }
 }
 
+/** ====== Geolocation permission（新增） ====== **/
+async function initGeoPermissionWatch() {
+  try {
+    // 非 HTTPS（或非 localhost）時，瀏覽器通常拒絕定位
+    if (location.protocol !== "https:" && location.hostname !== "localhost") {
+      alertText.value = "Geolocation requires HTTPS or localhost.";
+      fromAddr.value = "Location permission denied";
+      openFromEditor();
+      return;
+    }
+    if (!("permissions" in navigator)) return;
+    const perm = await navigator.permissions.query({ name: "geolocation" });
+    handleGeoPermissionState(perm.state);
+    perm.onchange = () => handleGeoPermissionState(perm.state);
+  } catch {}
+}
+function handleGeoPermissionState(state) {
+  if (state === "granted") {
+    statusText.value = "Location permission granted.";
+    // 使用者剛允許時，主動抓一次
+    reLocate();
+  } else if (state === "prompt") {
+    statusText.value = "Location permission needed. Click “Use current”.";
+  } else if (state === "denied") {
+    fromAddr.value = "Location permission denied";
+    alertText.value = "Location permission denied. Please enter a start location.";
+    openFromEditor();
+  }
+}
+
 /** ====== Place details (InfoWindow) ====== **/
 function todayHours(opening_hours) {
   if (!opening_hours?.weekday_text) return null;
@@ -279,6 +309,9 @@ function initMap() {
     // Wait for user to click "Find Routes"
   });
 
+  // 先監聽定位權限狀態
+  initGeoPermissionWatch();
+
   // Auto locate user
   navigator.geolocation?.getCurrentPosition(
     (pos) => {
@@ -290,8 +323,14 @@ function initMap() {
       canRoute.value = !!(userLL && destLL);
       statusText.value = "Your location is set.";
     },
-    () => { fromAddr.value = "Location permission denied"; alertText.value = "Location permission denied."; },
-    { enableHighAccuracy: true, timeout: 8000 }
+    // 失敗：提示並打開手動輸入
+    (err) => {
+      console.warn("getCurrentPosition failed:", err);
+      fromAddr.value = "Location permission denied";
+      alertText.value = "Location permission denied. Please enter a start location.";
+      openFromEditor();
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
   );
 }
 
@@ -437,7 +476,12 @@ function reLocate() {
       if (destLL) routeNow();
       statusText.value = "Location updated.";
     },
-    () => { alertText.value = "Unable to get your location."; },
+    // 失敗也切為手動輸入
+    (err) => {
+      console.warn("reLocate failed:", err);
+      alertText.value = "Unable to get your location. Please enter it manually.";
+      openFromEditor();
+    },
     { enableHighAccuracy: true, timeout: 8000 }
   );
 }
@@ -512,7 +556,7 @@ function updateProgressAndHints(me) {
     if (d > 50) { nextIdx = i; break; }
   }
   const hint = stepTexts[nextIdx] || "Continue";
-  nextHint.value = hint;                 // HUD text (we also expose it below in a live region)
+  nextHint.value = hint;
 
   try {
     const dToNext = hav(me, { lat: stepEnds[nextIdx].lat(), lng: stepEnds[nextIdx].lng() });
@@ -742,7 +786,7 @@ onBeforeUnmount(() => {
 
 /* HUD */
 .hud{display:flex;align-items:center;gap:16px;margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px}
-.hud-item{text-align:center;min-width:80px}
+.hud-item{text像:center;min-width:80px}
 .hud-num{font-weight:900;font-size:20px}
 .hud-label{font-size:12px;color:#6b7280}
 .hud-next{flex:1;font-weight:700;color:#111827}
