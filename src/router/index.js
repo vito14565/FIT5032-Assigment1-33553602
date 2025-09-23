@@ -19,6 +19,7 @@ import AdminPanel from '../pages/AdminPanel.vue'
 /* -------- Lazy-loaded pages (split chunks) -------- */
 const Tables = () => import('../pages/Tables.vue')          // BR D.3 (admin)
 const HealthyMap = () => import('../pages/HealthyMap.vue')  // BR E.2 Map page
+const RecipeDetail = () => import('../pages/RecipeDetail.vue') // ✅ NEW: 詳細頁
 
 const routes = [
   // Public pages
@@ -30,6 +31,7 @@ const routes = [
   // Auth-required pages
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { title: 'Dashboard' } },
   { path: '/recipes', name: 'Recipes', component: Recipes, meta: { title: 'Recipes' } },
+  { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail, meta: { title: 'Recipe Detail' } }, // ✅ NEW
 
   // Admin-only pages
   { path: '/admin', name: 'AdminPanel', component: AdminPanel, meta: { role: 'admin', title: 'Admin' } },
