@@ -12,39 +12,74 @@
         <ul class="navbar-nav">
           <!-- Public -->
           <li class="nav-item">
-            <RouterLink class="nav-link" to="/" aria-current="$route.path === '/' ? 'page' : null">Home</RouterLink>
+            <RouterLink
+              class="nav-link"
+              to="/"
+              :aria-current="$route.path === '/' ? 'page' : null"
+            >
+              Home
+            </RouterLink>
           </li>
           <li class="nav-item">
-            <RouterLink class="nav-link" to="/map" :aria-current="$route.path.startsWith('/map') ? 'page' : null">
+            <RouterLink
+              class="nav-link"
+              to="/map"
+              :aria-current="$route.path.startsWith('/map') ? 'page' : null"
+            >
               Healthy Map
+            </RouterLink>
+          </li>
+          <!-- ✅ New: Nutrition Calculator (public) -->
+          <li class="nav-item">
+            <RouterLink
+              class="nav-link"
+              to="/calculator"
+              :aria-current="$route.path.startsWith('/calculator') ? 'page' : null"
+            >
+              Calculator
             </RouterLink>
           </li>
 
           <!-- Protected (signed-in) -->
           <li class="nav-item" v-if="ready && user">
-            <!-- Use click prevent + guard to keep SPA link semantics -->
-            <RouterLink class="nav-link" to="/dashboard" @click.prevent="goOrWarn('/dashboard')"
-              :aria-current="$route.path.startsWith('/dashboard') ? 'page' : null">
+            <RouterLink
+              class="nav-link"
+              to="/dashboard"
+              @click.prevent="goOrWarn('/dashboard')"
+              :aria-current="$route.path.startsWith('/dashboard') ? 'page' : null"
+            >
               Dashboard
             </RouterLink>
           </li>
           <li class="nav-item" v-if="ready && user">
-            <RouterLink class="nav-link" to="/recipes" @click.prevent="goOrWarn('/recipes')"
-              :aria-current="$route.path.startsWith('/recipes') ? 'page' : null">
+            <RouterLink
+              class="nav-link"
+              to="/recipes"
+              @click.prevent="goOrWarn('/recipes')"
+              :aria-current="$route.path.startsWith('/recipes') ? 'page' : null"
+            >
               Recipes
             </RouterLink>
           </li>
 
-          <!-- Admin only (rendered only if admin; no aria-disabled/tabindex hacks needed) -->
+          <!-- Admin only -->
           <li class="nav-item" v-if="ready && role === 'admin'">
-            <RouterLink class="nav-link" to="/tables" @click.prevent="goOrWarn('/tables', true)"
-              :aria-current="$route.path.startsWith('/tables') ? 'page' : null">
+            <RouterLink
+              class="nav-link"
+              to="/tables"
+              @click.prevent="goOrWarn('/tables', true)"
+              :aria-current="$route.path.startsWith('/tables') ? 'page' : null"
+            >
               Tables
             </RouterLink>
           </li>
           <li class="nav-item" v-if="ready && role === 'admin'">
-            <RouterLink class="nav-link" to="/admin" @click.prevent="goOrWarn('/admin', true)"
-              :aria-current="$route.path.startsWith('/admin') ? 'page' : null">
+            <RouterLink
+              class="nav-link"
+              to="/admin"
+              @click.prevent="goOrWarn('/admin', true)"
+              :aria-current="$route.path.startsWith('/admin') ? 'page' : null"
+            >
               Admin
             </RouterLink>
           </li>
@@ -59,18 +94,29 @@
           <!-- Signed-in -->
           <div v-if="ready && user" class="d-flex align-items-center gap-2">
             <span class="nav-link disabled small" aria-live="polite">{{ user.email }}</span>
-            <button class="btn btn-outline-secondary btn-sm" @click="logout" aria-label="Log out">Logout</button>
+            <button
+              class="btn btn-outline-secondary btn-sm"
+              @click="logout"
+              aria-label="Log out"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </nav>
     </header>
 
     <!-- Inline guard feedback -->
-    <div v-if="notice" class="alert alert-danger mx-3 mt-3 py-2 small" role="alert" aria-live="assertive">
+    <div
+      v-if="notice"
+      class="alert alert-danger mx-3 mt-3 py-2 small"
+      role="alert"
+      aria-live="assertive"
+    >
       {{ notice }}
     </div>
 
-    <!-- SR-only route announcer for page changes (if you didn't add it in main.js) -->
+    <!-- SR-only route announcer for page changes -->
     <div id="route-announcer" class="sr-only" aria-live="polite"></div>
 
     <!-- Main content -->
@@ -85,12 +131,6 @@
 </template>
 
 <script setup>
-/**
- * App shell with:
- * - Accessible skip link + semantic landmarks
- * - Public, protected, and admin-only nav links
- * - Inline notice banner for auth/role guard feedback
- */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { auth, db } from './firebase'
@@ -102,7 +142,7 @@ const $route = useRoute()
 
 /* ---------------- State ---------------- */
 const user = ref(null)
-const role = ref(null)    // 'admin' | 'user' | null
+const role = ref(null) // 'admin' | 'user' | null
 const ready = ref(false)
 const notice = ref('')
 
@@ -117,11 +157,7 @@ function showNotice(msg) {
   }, 3000)
 }
 
-/**
- * Navigate or show an inline warning:
- * - If not signed in -> redirect to login with return URL
- * - If admin route and role !== admin -> show warning
- */
+/* ---------------- Navigation guard helper ---------------- */
 function goOrWarn(path, needsAdmin = false) {
   if (!user.value) {
     showNotice('Please log in to access this page.')
@@ -135,9 +171,13 @@ function goOrWarn(path, needsAdmin = false) {
   router.push(path)
 }
 
-/* ---------------- Role cache (localStorage) ---------------- */
-function cacheRole(uid, r) { localStorage.setItem(`role:${uid}`, r) }
-function getCachedRole(uid) { return localStorage.getItem(`role:${uid}`) }
+/* ---------------- Role cache ---------------- */
+function cacheRole(uid, r) {
+  localStorage.setItem(`role:${uid}`, r)
+}
+function getCachedRole(uid) {
+  return localStorage.getItem(`role:${uid}`)
+}
 
 /* ---------------- Auth watcher ---------------- */
 let stopAuthWatcher = null
@@ -165,7 +205,9 @@ onMounted(() => {
   })
 })
 
-onUnmounted(() => { if (typeof stopAuthWatcher === 'function') stopAuthWatcher() })
+onUnmounted(() => {
+  if (typeof stopAuthWatcher === 'function') stopAuthWatcher()
+})
 
 /* ---------------- Logout ---------------- */
 async function logout() {
@@ -177,7 +219,7 @@ async function logout() {
 </script>
 
 <style>
-/* Make the skip link visible only on focus */
+/* Skip link */
 .visually-hidden-focusable {
   position: absolute;
   left: -999px;
@@ -198,15 +240,18 @@ async function logout() {
   z-index: 1000;
 }
 
-/* SR-only utility used by #route-announcer */
+/* SR-only utility */
 .sr-only {
   position: absolute !important;
-  width: 1px; height: 1px;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  clip: rect(1px,1px,1px,1px);
+  clip: rect(1px, 1px, 1px, 1px);
   white-space: nowrap;
 }
 
 /* Highlight the active route link */
-.router-link-active.nav-link { font-weight: 600; }
+.router-link-active.nav-link {
+  font-weight: 600;
+}
 </style>

@@ -786,7 +786,7 @@ onBeforeUnmount(() => {
 
 /* HUD */
 .hud{display:flex;align-items:center;gap:16px;margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px}
-.hud-item{text像:center;min-width:80px}
+.hud-item{text:center;min-width:80px}
 .hud-num{font-weight:900;font-size:20px}
 .hud-label{font-size:12px;color:#6b7280}
 .hud-next{flex:1;font-weight:700;color:#111827}

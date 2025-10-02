@@ -19,7 +19,8 @@ import AdminPanel from '../pages/AdminPanel.vue'
 /* -------- Lazy-loaded pages (split chunks) -------- */
 const Tables = () => import('../pages/Tables.vue')          // BR D.3 (admin)
 const HealthyMap = () => import('../pages/HealthyMap.vue')  // BR E.2 Map page
-const RecipeDetail = () => import('../pages/RecipeDetail.vue') // ✅ NEW: 詳細頁
+const RecipeDetail = () => import('../pages/RecipeDetail.vue') // 詳細頁
+const NutritionCalculator = () => import('../pages/NutritionCalculator.vue') // ✅ NEW: 計算器
 
 const routes = [
   // Public pages
@@ -28,10 +29,13 @@ const routes = [
   // Map page is public (so assessors can open without login)
   { path: '/map', name: 'HealthyMap', component: HealthyMap, meta: { public: true, title: 'Healthy Map' } },
 
+  // ✅ NEW: Nutrition Calculator（公開以方便測試；若需登入，移除 public: true）
+  { path: '/calculator', name: 'NutritionCalculator', component: NutritionCalculator, meta: { public: true, title: 'Nutrition Calculator' } },
+
   // Auth-required pages
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { title: 'Dashboard' } },
   { path: '/recipes', name: 'Recipes', component: Recipes, meta: { title: 'Recipes' } },
-  { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail, meta: { title: 'Recipe Detail' } }, // ✅ NEW
+  { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetail, meta: { title: 'Recipe Detail' } },
 
   // Admin-only pages
   { path: '/admin', name: 'AdminPanel', component: AdminPanel, meta: { role: 'admin', title: 'Admin' } },
