@@ -31,7 +31,10 @@ function todayKey(d = new Date()) { return toLocalYmd(d) }
 function kcalOf({ carbs_g, protein_g, fat_g }) {
   return Math.round((Number(carbs_g||0)*4) + (Number(protein_g||0)*4) + (Number(fat_g||0)*9))
 }
-function pct(n, d) { if (!d) return 0; return Math.min(100, Math.round((n * 100) / d)) }
+function pct(n, d) { 
+  if (!d) return 0
+  return Math.round((n * 100) / d) 
+}
 
 /** ---------- A11y live regions ---------- **/
 const statusMsg = ref('')
@@ -76,8 +79,14 @@ onMounted(() => {
   })
 })
 
-/** ---------- Daily Goal ---------- **/
-const goalForm = reactive({ email: '', calories: '' })
+/** ---------- Daily Goal (BR4 擴充：四項目標) ---------- **/
+const goalForm = reactive({
+  email: '',
+  calories: '',
+  protein_g: '',
+  carbs_g: '',
+  fat_g: ''
+})
 const errors = reactive({})
 const emailEl = ref(null)
 const caloriesEl = ref(null)
@@ -96,6 +105,16 @@ function validateGoal() {
   } else if (Number.isNaN(cal) || cal < 0 || cal > 5000) {
     errors.calories = 'Calories must be between 0 and 5000'
   }
+
+  // 其餘目標非必填，但若填寫需合理
+  ;(['protein_g','carbs_g','fat_g']).forEach(k => {
+    const v = goalForm[k]
+    if (v === '' || v === null) return
+    const n = Number(v)
+    if (Number.isNaN(n) || n < 0 || n > 2000) {
+      errors[k] = '0–2000'
+    }
+  })
 
   const firstKey = Object.keys(errors)[0]
   if (firstKey) {
@@ -118,6 +137,10 @@ async function saveGoal() {
   const payload = {
     uid: uid.value,
     kcal: Number(goalForm.calories),
+    // 新增三大營養素目標（可為空，用 undefined 排除）
+    protein_g: goalForm.protein_g === '' ? undefined : Number(goalForm.protein_g),
+    carbs_g:   goalForm.carbs_g   === '' ? undefined : Number(goalForm.carbs_g),
+    fat_g:     goalForm.fat_g     === '' ? undefined : Number(goalForm.fat_g),
     updatedAt: Date.now(),
     ...(goalForm.email ? { email: goalForm.email } : {})
   }
@@ -187,6 +210,8 @@ const totals = computed(() =>
     return acc
   }, { carbs_g: 0, protein_g: 0, fat_g: 0, kcal: 0 })
 )
+
+// 目標文件（goals/{uid}）
 const goals = ref(null)
 
 async function loadGoals() {
@@ -195,6 +220,10 @@ async function loadGoals() {
   if (snap.exists()) {
     goals.value = snap.data()
     if (snap.data().kcal != null) goalForm.calories = String(snap.data().kcal)
+    // 將三大營養素預填回表單（若有值）
+    ;(['protein_g','carbs_g','fat_g']).forEach(k => {
+      if (snap.data()[k] != null) goalForm[k] = String(snap.data()[k])
+    })
   }
 }
 
@@ -285,7 +314,7 @@ function watchTodayIntake() {
   unsubToday = subscribe(qIndexed, false)
 }
 
-/** ---------- Pie (colored) ---------- **/
+/** ---------- BR1 Pie (colored) ---------- **/
 const PIE_COLORS = {
   carbs:   '#60a5fa',
   protein: '#34d399',
@@ -321,7 +350,7 @@ const pieOptions = {
   }
 }
 
-/** ---------- History (7/30 days) with string range & zero fill ---------- */
+/** ---------- BR1 History (7/30 days) ---------- */
 const historyDays = ref(7) // 7 or 30
 const historySeries = ref([]) // [{dateKey, kcal}]
 
@@ -422,6 +451,30 @@ function changeHistoryRange(days) {
   watchHistory()
 }
 
+/** ---------- BR4：計算進度與建議 ---------- */
+const progress = computed(() => {
+  const g = goals.value || {}
+  return {
+    kcal:    pct(totals.value.kcal,     g.kcal || 0),
+    protein: pct(totals.value.protein_g,g.protein_g || 0),
+    carbs:   pct(totals.value.carbs_g,  g.carbs_g || 0),
+    fat:     pct(totals.value.fat_g,    g.fat_g || 0),
+  }
+})
+const smartTips = computed(() => {
+  const g = goals.value || {}
+  const t = totals.value
+  const tips = []
+  if (g.kcal) {
+    if (t.kcal < g.kcal * 0.85) tips.push('Calories below 85% — consider an extra snack.')
+    if (t.kcal > g.kcal * 1.10) tips.push('Calories exceed 110% — go lighter next meal.')
+  }
+  if (g.protein_g && t.protein_g < g.protein_g) tips.push('Protein below target — add tofu/lean meat/yogurt.')
+  if (g.carbs_g && t.carbs_g < g.carbs_g * 0.8) tips.push('Carbs quite low — whole grains or fruit can help.')
+  if (g.fat_g && t.fat_g > g.fat_g * 1.2) tips.push('Fat exceeds 120% — reduce oils or high-fat toppings.')
+  return tips
+})
+
 /** ---------- cleanup on leave ---------- */
 onBeforeUnmount(() => {
   if (unsubToday) { unsubToday(); unsubToday = null }
@@ -454,7 +507,7 @@ onBeforeUnmount(() => {
       </div>
     </transition>
 
-    <!-- 1) Daily Goal -->
+    <!-- 1) Daily Goal (擴充：新增三大營養素目標) -->
     <div class="card p-4 mb-4 shadow-sm">
       <h5 class="mb-3">🎯 Daily Goal</h5>
       <form class="row gy-3" @submit.prevent="saveGoal" novalidate>
@@ -492,6 +545,26 @@ onBeforeUnmount(() => {
           <div v-if="errors.calories" id="calories-error" class="text-danger small mt-1" role="alert">
             {{ errors.calories }}
           </div>
+        </div>
+
+        <!-- 新增：三大營養素目標（可選） -->
+        <div class="col-12 col-md-4">
+          <label class="form-label">Protein (g)</label>
+          <input class="form-control" v-model.trim="goalForm.protein_g" type="number" min="0" max="2000"
+                 :aria-invalid="!!errors.protein_g" />
+          <div v-if="errors.protein_g" class="text-danger small mt-1" role="alert">{{ errors.protein_g }}</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Carbs (g)</label>
+          <input class="form-control" v-model.trim="goalForm.carbs_g" type="number" min="0" max="2000"
+                 :aria-invalid="!!errors.carbs_g" />
+          <div v-if="errors.carbs_g" class="text-danger small mt-1" role="alert">{{ errors.carbs_g }}</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Fat (g)</label>
+          <input class="form-control" v-model.trim="goalForm.fat_g" type="number" min="0" max="2000"
+                 :aria-invalid="!!errors.fat_g" />
+          <div v-if="errors.fat_g" class="text-danger small mt-1" role="alert">{{ errors.fat_g }}</div>
         </div>
 
         <div class="col-12 text-end">
@@ -555,22 +628,70 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 4) Progress vs Goal -->
+      <!-- 4) Progress vs Goal（擴充：四條進度 + 提示） -->
       <div class="col-12 col-lg-6">
         <div class="card p-4 h-100 shadow-sm">
-          <h5 class="mb-3">🎯 Progress vs Goal</h5>
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <h5 class="mb-0">🎯 Progress vs Goal</h5>
+            <!-- 簡易徽章 -->
+            <span v-if="goals && progress.kcal>110" class="badge text-bg-danger">Calories high</span>
+            <span v-if="goals && goals.protein_g && progress.protein<60" class="badge text-bg-warning">Protein low</span>
+          </div>
+
           <div v-if="goals">
+            <!-- kcal -->
             <div class="mb-3">
               <label class="form-label d-block">
                 kcal {{ totals.kcal }} / {{ goals.kcal }}
-                <span class="ms-2 text-muted small">({{ pct(totals.kcal, goals.kcal) }}%)</span>
+                <span class="ms-2 text-muted small">({{ progress.kcal }}%)</span>
               </label>
               <div class="progress" style="height: 20px;">
-                <div class="progress-bar bg-success" :style="{ width: pct(totals.kcal, goals.kcal) + '%' }"></div>
+                <div class="progress-bar bg-success" :style="{ width: progress.kcal + '%' }"></div>
               </div>
             </div>
-            <p class="text-muted small mb-0">Set more macro goals later for detailed tracking.</p>
+
+            <!-- Protein -->
+            <div v-if="goals.protein_g != null" class="mb-3">
+              <label class="form-label d-block">
+                Protein {{ totals.protein_g }}g / {{ goals.protein_g }}g
+                <span class="ms-2 text-muted small">({{ progress.protein }}%)</span>
+              </label>
+              <div class="progress" style="height: 14px;">
+                <div class="progress-bar bg-info" :style="{ width: progress.protein + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Carbs -->
+            <div v-if="goals.carbs_g != null" class="mb-3">
+              <label class="form-label d-block">
+                Carbs {{ totals.carbs_g }}g / {{ goals.carbs_g }}g
+                <span class="ms-2 text-muted small">({{ progress.carbs }}%)</span>
+              </label>
+              <div class="progress" style="height: 14px;">
+                <div class="progress-bar bg-primary" :style="{ width: progress.carbs + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Fat -->
+            <div v-if="goals.fat_g != null" class="mb-3">
+              <label class="form-label d-block">
+                Fat {{ totals.fat_g }}g / {{ goals.fat_g }}g
+                <span class="ms-2 text-muted small">({{ progress.fat }}%)</span>
+              </label>
+              <div class="progress" style="height: 14px;">
+                <div class="progress-bar bg-warning" :style="{ width: progress.fat + '%' }"></div>
+              </div>
+            </div>
+
+            <!-- Tips -->
+            <div v-if="smartTips.length" class="alert alert-info mt-3 mb-0">
+              <ul class="mb-0 ps-3">
+                <li v-for="(t,i) in smartTips" :key="i">{{ t }}</li>
+              </ul>
+            </div>
+            <p v-else class="text-muted small mb-0">Nice! You're on track today.</p>
           </div>
+
           <p v-else class="text-muted mb-0">Set your daily goal to view progress.</p>
         </div>
       </div>
