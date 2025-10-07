@@ -10,7 +10,6 @@ export default function useGoals () {
   const goals = ref({ daily: { kcal: 0, protein: 0, carbs: 0, fat: 0 } })
   const todayTotal = ref({ kcal: 0, protein: 0, carbs: 0, fat: 0 })
 
-  // 今日 00:00 ~ 明日 00:00
   const today = new Date()
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const end = new Date(start); end.setDate(end.getDate() + 1)

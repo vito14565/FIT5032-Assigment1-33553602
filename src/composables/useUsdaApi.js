@@ -2,7 +2,7 @@
 const API_BASE = 'https://api.nal.usda.gov/fdc/v1'
 const API_KEY =
   import.meta.env.VITE_USDA_API_KEY ||
-  'xDBucrEQOlMjsZmB57a79O72NFRbjst9jEpf0uUQ' // demo key，正式用 .env 的
+  'xDBucrEQOlMjsZmB57a79O72NFRbjst9jEpf0uUQ' 
 
 console.log('[FDC] key present?', !!API_KEY, 'length:', API_KEY?.length || 0)
 
@@ -22,7 +22,6 @@ function round1(n) {
   return Number.isFinite(v) ? Math.round(v * 10) / 10 : 0
 }
 
-// 由 labelNutrients 取「每份」數值；若 serving 是 g/ml/oz/fl oz，把每份換算成「每 100g」
 function per100FromLabel(food) {
   const ln = food?.labelNutrients || {}
   let perServing = {
@@ -32,17 +31,16 @@ function per100FromLabel(food) {
     fat_g:     ln?.fat?.value ?? 0,
   }
 
-  // 估每份幾克
+
   let gramPerServing = 0
   const unit = (food?.servingSizeUnit || '').toLowerCase()
   const size = Number(food?.servingSize)
 
   if (size && unit === 'g') gramPerServing = size
-  else if (size && unit === 'ml') gramPerServing = size // 略假 1ml≈1g
+  else if (size && unit === 'ml') gramPerServing = size 
   else if (size && unit === 'oz') gramPerServing = size * 28.3495
   else if (size && unit.replace(/\s+/g, '') === 'floz') gramPerServing = size * 29.5735
   else {
-    // 用 householdServingFullText 試著抓 “9 oz” 之類
     const text = (food?.householdServingFullText || '').toLowerCase()
     const m = text.match(/([\d.]+)\s*(g|ml|oz|fl\s*oz)/)
     if (m) {
@@ -92,22 +90,18 @@ async function doSearch(query, pageSize, dataTypesCsv) {
   const json = await res.json()
   const foods = json.foods || []
 
-  // 逐筆（必要時打 detail）補到每 100g
   const items = await Promise.all(
     foods.slice(0, pageSize).map(async f => {
-      // 先試 foodNutrients（通常就是每 100g）
       let kcal      = getN(f.foodNutrients, '1008')
       let carbs_g   = getN(f.foodNutrients, '1005')
       let protein_g = getN(f.foodNutrients, '1003')
       let fat_g     = getN(f.foodNutrients, '1004')
 
-      // 若為 0，改用 labelNutrients + 換算
       if (!(kcal || carbs_g || protein_g || fat_g)) {
         const fromLabel = per100FromLabel(f)
         if (fromLabel) {
           ({ kcal, carbs_g, protein_g, fat_g } = fromLabel)
         } else {
-          // 再打 detail 補資訊
           const detail = await fetchDetailPer100(f.fdcId)
           if (detail) ({ kcal, carbs_g, protein_g, fat_g } = detail)
         }
@@ -132,13 +126,12 @@ async function doSearch(query, pageSize, dataTypesCsv) {
     })
   )
 
-  // 簡單過濾掉真的沒資料的
   return items.filter(x =>
     x.per100.kcal || x.per100.carbs_g || x.per100.protein_g || x.per100.fat_g
   )
 }
 
-/** 先 Foundation/SR；若沒結果再 Branded */
+
 export async function searchFoods(query, pageSize = 20) {
   if (!API_KEY) throw new Error('Missing VITE_USDA_API_KEY')
 
